@@ -94,8 +94,9 @@ class IndigoMockTestCase(TestCase):
 class PluginTestCase(IndigoMockTestCase):
     def setUp(self):
         IndigoMockTestCase.setUp(self)
-        PluginBaseForTest.pluginPrefs = {u"showDebugInfo" : False}
-        PluginBaseForTest.debugLog = Mock(side_effect=print)
+        PluginBaseForTest.pluginPrefs = {u"showDebugInfo" : False,
+                                         u"showJomnilinkIIDebugInfo" : False}
+        PluginBaseForTest.debugLog = Mock()
         PluginBaseForTest.errorLog = Mock(side_effect=print)
         PluginBaseForTest.sleep = Mock()
         PluginBaseForTest.substitute = substitute
@@ -110,13 +111,14 @@ class PluginTestCase(IndigoMockTestCase):
         IndigoMockTestCase.tearDown(self)
 
     def new_plugin(self):
-        # Before I created this little function,
+        # Before I created this function,
         # python was giving me a bizillion "NoneType object has no
         # attribute" warnings, I think because tearDown is called,
         # removing the base class, before the plugin objects are deleted.
         # why this fixed it is a mystery to me
         props = {}
-        props["showDebugInfo"]=False
+        props["showDebugInfo"] = False
+        props["showJomnilinkIIDebugInfo"] = False
         with open(os.path.join(testpath, "omni.txt"), "r") as keyfile:
             # In order to test communication with your omni system, put its
             # connection parameters (ip address, port, encryption key) in a
@@ -133,7 +135,7 @@ class PluginTestCase(IndigoMockTestCase):
         return plugin
 
     def test_DebugMenuItem_Toggles(self):
-        self.assertFalse(self.plugin.debug)
+        self.plugin.debug = False
         self.plugin.debugLog.reset_mock()
         self.plugin.toggleDebugging()
         self.assertEqual(self.plugin.debugLog.call_count, 1)
@@ -144,8 +146,21 @@ class PluginTestCase(IndigoMockTestCase):
         self.assertFalse(self.plugin.debug)
         self.assertFalse(PluginBaseForTest.errorLog.called)
 
+    def test_JomnilinkIIDebugMenuItem_Toggles(self):
+        self.plugin.debug_jomnilinkII = False
+        self.plugin.debugLog.reset_mock()
+        self.plugin.toggleJomnilinkIIDebugging()
+        self.assertEqual(self.plugin.debugLog.call_count, 1)
+        self.assertTrue(self.plugin.debug_jomnilinkII)
+
+        self.plugin.toggleJomnilinkIIDebugging()
+        self.assertEqual(self.plugin.debugLog.call_count, 2)
+        self.assertFalse(self.plugin.debug_jomnilinkII)
+        self.assertFalse(PluginBaseForTest.errorLog.called)
+
     def test_PreferencesUIValidation_Succeeds_OnValidInput(self):
         values = {"showDebugInfo" : True,
+                  "showJomnilinkIIDebugInfo" : True,
                   "ipAddress" : "192.168.1.42",
                   "portNumber" : "4444",
                   "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
@@ -159,7 +174,8 @@ class PluginTestCase(IndigoMockTestCase):
 
     def test_PreferencesUIValidation_Fails_OnInvalidInput(self):
         test_values = [
-            {"showDebugInfo" : True,
+            {"showDebugInfo" : False,
+             "showJomnilinkIIDebugInfo": False,
               "ipAddress" : "not an ip address",
               "portNumber" : "not a port",
               "encryptionKey1" : "not an encryption key",
@@ -173,8 +189,8 @@ class PluginTestCase(IndigoMockTestCase):
                 self.assertTrue(k in e)
                 
     def test_DeviceStartComm_Succeeds_OnValidInput(self):
-        dev = self.make_and_start_a_test_device(1, "dev1",
-                {"deviceVersion":_VERSION})
+        self.make_and_start_a_test_device(1, "dev1",
+                                          {"deviceVersion":_VERSION})
         self.assertFalse(PluginBaseForTest.errorLog.called)
 
     def test_DeviceStopComm_Succeeds(self):

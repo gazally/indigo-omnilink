@@ -17,8 +17,15 @@
     <Label>Encryption Key Part 2:</Label>
   </Field>
   <Field id="sep2" type="separator"/>
+  <Field id="debugging" type="label">
+    <Label>Debug logging options:</Label>
+  </Field>
   <Field id="showDebugInfo" type="checkbox" defaultValue="false">
-    <Label>Enable plugin debug logging:</Label>
+    <Label>Plugin:</Label>
+    <Description>(not recommended)</Description>
+  </Field>
+  <Field id="showJomnilinkIIDebugInfo" type="checkbox" defaultValue="false">
+    <Label>OMNI Network Communication:</Label>
     <Description>(not recommended)</Description>
   </Field>
   <Field id="configVersion" type="textfield" hidden="true" defaultValue="0.1.0">
