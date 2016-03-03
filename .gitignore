@@ -1,0 +1,6 @@
+*~
+*.pyc
+*.class
+.coverage
+omni.txt
+
