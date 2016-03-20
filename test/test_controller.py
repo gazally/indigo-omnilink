@@ -43,7 +43,6 @@ class ControllerDeviceTestCase(PluginTestCase):
         self.assertTrue(("omniControllerDevice", "Controller") in result)
 
     def test_CreateDevices_CreatesOnlyOneController(self):
-        pass
         values = {"ipAddress" : "192.168.1.42",
                   "portNumber" : "4444",
                   "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
@@ -173,6 +172,70 @@ class ControllerDeviceTestCase(PluginTestCase):
         self.assertTrue(dev.error_state is None)
         self.assertTrue(dev.states["digitalCommunicatorTrouble"])
 
+    def test_WriteControllerInfoToLog_Succeeds(self):
+        mock_capacities = Mock()
+        mock_capacities.getCapacity.return_value = 2
+        mock_troubles = Mock()
+        mock_troubles.getTroubles.return_value = ["trouble"]
+        mock_features = Mock()
+        mock_features.getFeatures.return_value = ["features"]
+        mock_statuses = Mock()
+        mock_statuses.getStatuses.return_value = [Mock()]
+        mock_properties = self.create_reqObjProperties_Mock()
+        
+        for cm in self.connection_mocks:
+            cm.reqObjectTypeCapacities.return_value = mock_capacities
+            cm.reqSystemTroubles.return_value = mock_troubles
+            cm.reqSystemFeatures.return_value = mock_features
+            cm.reqObjectStatus.return_value = mock_statuses
+            cm.reqObjectProperties = mock_properties
+
+        values = {"ipAddress" : "192.168.1.99",
+                  "portNumber" : "4444",
+                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
+                  "prefix" : ""}
+        values.update(self.dialog_flags)
+        self.plugin.makeConnection(values, [])
+
+        values = {"ipAddress" : "10.0.0.1",
+                  "portNumber" : "4444",
+                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
+                  "prefix" : ""}
+        values.update(self.dialog_flags)        
+        self.plugin.makeConnection(values, [])
+        self.plugin.writeControllerInfoToLog()
+
+    def create_reqObjProperties_Mock(self):
+        self.jomnilinkII_mock.Message.MESG_TYPE_OBJ_PROP = 0x21
+        class locals:
+            objs = [JomnilinkII_ObjectProperties_for_test(0, 1, "Thing 1", 0x21),
+                    JomnilinkII_ObjectProperties_for_test(0, 2, "Thing 2", 0x21),
+                    JomnilinkII_ObjectProperties_for_test(0, 0, "", 0)]
+            index = 0
+        def looper(a, b, c, d, e, f):
+            retval = locals.objs[locals.index % len(locals.objs)]
+            locals.index += 1
+            return retval
+        reqfunc = Mock(side_effect = looper)
+        return reqfunc
+        
+
+    def test_WriteControllerInfoToLog_Handles_NetworkError(self):
+        self.connection_mock.reqSystemInformation = Mock(
+            side_effect = self.plugin_module.extensions.ConnectionError)
+        values = {"ipAddress" : "192.168.1.42",
+                  "portNumber" : "4444",
+                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
+                  "prefix" : ""}
+        values.update(self.dialog_flags)
+        self.plugin.makeConnection(values, [])
+        self.assertFalse(self.plugin.errorLog.called)
+        self.plugin.writeControllerInfoToLog()
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
 
 if __name__ == "__main__":
     unittest.main()

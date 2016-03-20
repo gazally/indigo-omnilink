@@ -663,7 +663,6 @@ class Connection(object):
         if reconnecting:
             if self.is_connected():
                 for c in self.reconnect_callbacks:
-                    log.debug("calling " + str(c))
                     c(self)
 
     def is_connected(self):

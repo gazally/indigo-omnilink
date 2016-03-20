@@ -205,6 +205,8 @@ Isn't Python wonderful?
         def __init__(self, *args):
             for name, arg in zip(argnames, args):
                 setattr(self, name, arg)
+        def toString(self):
+            return " ".join(argnames)
     def make_method(argname):
         def method(self):
             return getattr(self, argname)
@@ -218,6 +220,9 @@ JomnilinkII_ObjectStatus_for_test = build_java_class_mimic(
 
 JomnilinkII_ZoneProperties_for_test = build_java_class_mimic(
     ["MessageType", "Name", "Number", "ZoneType", "Area", "Options"])
+
+JomnilinkII_ObjectProperties_for_test = build_java_class_mimic(
+    ["ObjectType", "Number", "Name", "MessageType"])
 
 JomnilinkII_SystemInformation_for_test = build_java_class_mimic(
     ["Model", "Major", "Minor", "Revision", "Phone"])

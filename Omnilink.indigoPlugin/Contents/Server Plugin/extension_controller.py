@@ -48,7 +48,9 @@ class ControllerExtension(extensions.PluginExtension):
                          "action": [],
                          "event": []}
         self.devices = []
-        self.callbacks = {}
+        self.callbacks = {
+            "writeControllerInfoToLog": self.writeControllerInfoToLog
+        }
         self.controller_info = {}
 
     # ----- Device Start and Stop Methods ----- #
@@ -179,3 +181,169 @@ class ControllerExtension(extensions.PluginExtension):
                     connection_key):
                 dev.updateStateOnServer("connected", False)
                 dev.setErrorStateOnServer("not connected")
+
+    # ----- Menu Item Callbacks ----- #
+
+    def writeControllerInfoToLog(self):
+        """ Callback for the "Write information on connected OMNI Controllers
+        to Log" menu item.
+        """
+        first = True
+        for c in self.plugin.connections.values():
+            if not c.is_connected():
+                msg = "OMNI Controller at {0} is not connected".format(c.ip)
+                if c.javaproc is None:
+                    msg = msg + ("because the Java subprocess could not be "
+                                 "started.")
+                elif c.gateway is None:
+                    msg = msg + ("because the gateway between Python and Java "
+                                 "could not be started.")
+                else:
+                    msg = msg + ("because it did not respond, or because the "
+                                 "IP address, port or encryption keys are "
+                                 "not correct.")
+                self.log(msg)
+            else:
+                if first:
+                    first = False
+                else:
+                    self.log("-" * 80)
+                try:
+                    self.log_everything_we_know_about(c)
+                except (ConnectionError, Py4JError):
+                    log.error("Error communicating with Omni system")
+                    log.debug("", exc_info=True)
+
+    def log_everything_we_know_about(self, c):
+        self.log("Omni Controller at {0}:".format(c.ip))
+        M = c.jomnilinkII.Message
+        OP = c.jomnilinkII.MessageTypes.ObjectProperties
+        omni = c.omni
+
+        self.log(omni.reqSystemInformation().toString())
+        self.log(omni.reqSystemStatus().toString())
+        self.log(omni.reqSystemFormats().toString())
+
+        self.log("System Troubles:", *omni.reqSystemTroubles().getTroubles())
+        self.log("System Features:", *omni.reqSystemFeatures().getFeatures())
+
+        self.log(
+            "Max zones:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_ZONE).getCapacity())
+
+        self.log(
+            "Max units:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_UNIT).getCapacity())
+
+        self.log(
+            "Max areas:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_AREA).getCapacity())
+
+        self.log(
+            "Max buttons:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_BUTTON).getCapacity())
+
+        self.log(
+            "Max codes:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_CODE).getCapacity())
+
+        self.log(
+            "Max thermostats:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_THERMO).getCapacity())
+
+        max_messages = omni.reqObjectTypeCapacities(
+            M.OBJ_TYPE_MESG).getCapacity()
+        self.log("Max messages:", max_messages)
+
+        max_audio_zones = omni.reqObjectTypeCapacities(
+            M.OBJ_TYPE_AUDIO_ZONE).getCapacity()
+        self.log("Max audio zones:", max_audio_zones)
+
+        max_audio_sources = omni.reqObjectTypeCapacities(
+            M.OBJ_TYPE_AUDIO_SOURCE).getCapacity()
+        self.log("Max audio sources:", max_audio_sources)
+
+        self.query_and_print(omni, M.OBJ_TYPE_ZONE, M.MESG_TYPE_OBJ_PROP,
+                             OP.FILTER_1_NAMED,
+                             OP.FILTER_2_AREA_ALL,
+                             OP.FILTER_3_ANY_LOAD)
+
+        self.query_and_print(omni, M.OBJ_TYPE_AREA, M.MESG_TYPE_OBJ_PROP,
+                             OP.FILTER_1_NAMED_UNAMED,
+                             OP.FILTER_2_NONE,
+                             OP.FILTER_3_NONE)
+
+        self.query_and_print(omni, M.OBJ_TYPE_UNIT, M.MESG_TYPE_OBJ_PROP,
+                             OP.FILTER_1_NAMED,
+                             OP.FILTER_2_AREA_ALL,
+                             OP.FILTER_3_ANY_LOAD)
+
+        self.query_and_print(omni, M.OBJ_TYPE_BUTTON, M.MESG_TYPE_OBJ_PROP,
+                             OP.FILTER_1_NAMED,
+                             OP.FILTER_2_AREA_ALL,
+                             OP.FILTER_3_NONE)
+
+        self.query_and_print(omni, M.OBJ_TYPE_CODE, M.MESG_TYPE_OBJ_PROP,
+                             OP.FILTER_1_NAMED,
+                             OP.FILTER_2_AREA_ALL,
+                             OP.FILTER_3_NONE)
+
+        self.query_and_print(omni, M.OBJ_TYPE_THERMO, M.MESG_TYPE_OBJ_PROP,
+                             OP.FILTER_1_NAMED,
+                             OP.FILTER_2_AREA_ALL,
+                             OP.FILTER_3_NONE)
+
+        self.query_and_print(omni, M.OBJ_TYPE_AUX_SENSOR, M.MESG_TYPE_OBJ_PROP,
+                             OP.FILTER_1_NAMED,
+                             OP.FILTER_2_AREA_ALL,
+                             OP.FILTER_3_NONE)
+
+        self.query_and_print(omni, M.OBJ_TYPE_MESG, M.MESG_TYPE_OBJ_PROP,
+                             OP.FILTER_1_NAMED,
+                             OP.FILTER_2_AREA_ALL,
+                             OP.FILTER_3_NONE)
+
+        status = omni.reqObjectStatus(M.OBJ_TYPE_AUDIO_ZONE, 1,
+                                      max_audio_zones)
+        statuses = status.getStatuses()
+        for s in statuses:
+            self.log(s.toString())
+
+        for as_index in range(1, max_audio_sources):
+            pos = 0
+            while True:
+                m = omni.reqAudioSourceStatus(as_index, pos)
+                if m.getMessageType() != M.MESG_TYPE_AUDIO_SOURCE_STATUS:
+                    break
+                self.log(m.toString())
+                pos = m.getPosition()
+
+        num = 0
+        count = 0
+        while True:
+            m = omni.uploadEventLogData(num, 1)
+            if (m.getMessageType() != M.MESG_TYPE_EVENT_LOG_DATA or
+                    count > 10):
+                break
+            self.log(m.toString())
+            num = m.getEventNumber()
+            count += 1
+
+        self.log(omni.uploadNames(M.OBJ_TYPE_UNIT, 0).toString())
+
+    def query_and_print(self, omni, objtype, mtype, filter1, filter2, filter3):
+        objnum = 0
+        while True:
+            m = omni.reqObjectProperties(objtype, objnum, 1, filter1, filter2,
+                                         filter3)
+            if m.getMessageType() != mtype:
+                break
+            self.log(m.toString())
+            objnum = m.getNumber()
+            status = omni.reqObjectStatus(objtype, objnum, objnum)
+            statuses = status.getStatuses()
+            for s in statuses:
+                self.log(s.toString())
+
+    def log(self, *args):
+        indigo.server.log(" ".join([unicode(arg) for arg in args]))

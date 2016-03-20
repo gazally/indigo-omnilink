@@ -77,8 +77,10 @@ mock_indigo.Dict = dict
 mock_indigo.PluginBase = PluginBaseForTest
 PluginBaseForTest.debugLog = Mock(side_effect=print)
 PluginBaseForTest.errorLog = Mock(side_effect=print)
+mock_indigo.server.log = Mock(side_effect=print)
 PluginBaseForTest.sleep = Mock()
 mock_indigo.devices = IndigoDictForTest()
+
 
 dev_id = 1000
 def create_device(protocol, deviceTypeId, props=None, name=None):
