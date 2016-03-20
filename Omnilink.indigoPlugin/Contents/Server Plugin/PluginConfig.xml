@@ -1,22 +1,6 @@
 <?xml version="1.0"?>
 <PluginConfig>
   <SupportURL>http://github.com/gazally/indigo-omnilink</SupportURL>
-  <Field id="explanation" type="label">
-    <Label>Please enter the following information from the Setup menu on your Omni system keypad:"</Label>
-  </Field>
-  <Field id="ipAddress" type="textfield">
-    <Label>IP Address:</Label>
-  </Field>
-  <Field id="portNumber" type="textfield">
-    <Label>Port:</Label>
-  </Field>
-  <Field id="encryptionKey1" type="textfield">
-    <Label>Encryption Key Part 1:</Label>
-  </Field>
-  <Field id="encryptionKey2" type="textfield">
-    <Label>Encryption Key Part 2:</Label>
-  </Field>
-  <Field id="sep2" type="separator"/>
   <Field id="debugging" type="label">
     <Label>Debug logging options:</Label>
   </Field>
@@ -31,6 +15,7 @@
   <Field id="configVersion" type="textfield" hidden="true" defaultValue="0.1.0">
     <Label>Hidden config version</Label>
   </Field>
+  <Field id="sep3" type="separator"/>
   <Field id="copyleft" type="label">
     <Label>Omnilink Plugin for Indigo Server  Copyright (C) 2016 Gemini Lasswell
 This program comes with ABSOLUTELY NO WARRANTY. This is free software, and you are welcome to redistribute it under certain conditions. See the LICENSE.txt file downloaded with the program for details.</Label>

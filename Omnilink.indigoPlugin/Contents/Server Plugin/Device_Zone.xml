@@ -1,0 +1,66 @@
+<Device type="custom" id="omniZoneDevice">
+  <Name>Omni II Zone</Name>
+  <States>
+    <State id="number">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Number:</TriggerLabel>
+      <ControlPageLabel>Number:</ControlPageLabel>
+    </State>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name:</TriggerLabel>
+      <ControlPageLabel>Name:</ControlPageLabel>
+    </State>
+    <State id="crossZoning">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Cross Zoning Setting:</TriggerLabel>
+      <ControlPageLabel>Cross Zoning Setting:</ControlPageLabel>
+    </State>
+    <State id="swingerShutdown">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Swinger Shutdown Setting:</TriggerLabel>
+      <ControlPageLabel>Swinger Shutdown Setting:</ControlPageLabel>
+    </State>
+    <State id="dialOutDelay">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Dial Out Delay Setting:</TriggerLabel>
+      <ControlPageLabel>Dial Out Delay Setting:</ControlPageLabel>
+    </State>
+    <State id="type">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Type:</TriggerLabel>
+      <ControlPageLabel>Type:</ControlPageLabel>
+    </State>
+    <State id="area">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Area:</TriggerLabel>
+      <ControlPageLabel>Area:</ControlPageLabel>
+    </State>
+    <State id="loop">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Analog Loop Reading:</TriggerLabel>
+      <ControlPageLabel>Analog Loop Reading:</ControlPageLabel>
+    </State>
+    <State id="condition">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Condition:</TriggerLabel>
+      <ControlPageLabel>Condition:</ControlPageLabel>
+    </State>
+    <State id="alarmStatus">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Alarm Status:</TriggerLabel>
+      <ControlPageLabel>Alarm Status:</ControlPageLabel>
+    </State>
+    <State id="armingStatus">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Arming Status:</TriggerLabel>
+      <ControlPageLabel>Arming Status:</ControlPageLabel>
+    </State>
+    <State id="hadTrouble">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Had Trouble:</TriggerLabel>
+      <ControlPageLabel>Had Trouble:</ControlPageLabel>
+    </State>
+  </States>
+  <UiDisplayStateId>condition</UiDisplayStateId>  
+</Device>

@@ -1,0 +1,57 @@
+<Device type="custom" id="omniControllerDevice">
+  <Name>Omni Controller</Name>
+  <States>
+    <State id="connected">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Connected:</TriggerLabel>
+      <ControlPageLabel>Connected:</ControlPageLabel>
+    </State>
+    <State id="model">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Model:</TriggerLabel>
+      <ControlPageLabel>Model:</ControlPageLabel>
+    </State>
+    <State id="firmwareVersion">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Firmware Version:</TriggerLabel>
+      <ControlPageLabel>Firmware Version:</ControlPageLabel>
+    </State>
+    <State id="batteryReading">
+      <ValueType>Number</ValueType>
+      <TriggerLabel>Battery Reading:</TriggerLabel>
+      <ControlPageLabel>Battery Reading:</ControlPageLabel>
+    </State>
+    <State id="freezeTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Freeze Trouble:</TriggerLabel>
+      <ControlPageLabel>Freeze Trouble:</ControlPageLabel>
+    </State>
+    <State id="batteryLowTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Battery Low Trouble:</TriggerLabel>
+      <ControlPageLabel>Battery Low Trouble:</ControlPageLabel>
+    </State>
+    <State id="ACPowerTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>AC Power Trouble:</TriggerLabel>
+      <ControlPageLabel>AC Power Trouble:</ControlPageLabel>
+    </State>
+    <State id="phoneLineTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Phone Line Trouble:</TriggerLabel>
+      <ControlPageLabel>Phone Line Trouble:</ControlPageLabel>
+    </State>
+    <State id="digitalCommunicatorTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Digital Communicator Trouble:</TriggerLabel>
+      <ControlPageLabel>Digital Communicator Trouble:</ControlPageLabel>
+    </State>
+    <State id="fuseTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Fuse Trouble:</TriggerLabel>
+      <ControlPageLabel>Fuse Trouble:</ControlPageLabel>
+    </State>
+  </States>
+  <UiDisplayStateId>connected</UiDisplayStateId>  
+</Device>
+    

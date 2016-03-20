@@ -1,5 +1,3 @@
-<?xml version="1.0"?>
-<MenuItems>
 <MenuItem id="toggleDebugging">
   <Name>Toggle Debugging</Name>
   <CallbackMethod>toggleDebugging</CallbackMethod>
@@ -8,4 +6,3 @@
   <Name>Toggle Debugging of OMNI Network Communication</Name>
   <CallbackMethod>toggleJomnilinkIIDebugging</CallbackMethod>
 </MenuItem>
-</MenuItems>

@@ -18,121 +18,29 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 
-import datetime
-import sys, os
 import unittest
 
-from unittest import TestCase
-from mock import patch, Mock, MagicMock
-import time
-from threading import Thread
+from mock import Mock, MagicMock, patch
 
-_VERSION = "0.1.0"
+from fixtures_for_test import *
 
-testpath = os.getcwd()
-sys.path.append(os.path.abspath('../Omnilink.indigoPlugin/Contents/Server Plugin'))
-os.chdir(os.path.abspath('../Omnilink.indigoPlugin/Contents/Server Plugin'))
+class PluginStartQuitTestCase(PluginStartupShutdownTestCase):
 
-concurrent_thread_time = 0.5
+    def test_Creation_Handles_FailureToStartJava(self):
+        with patch("plugin.subprocess.Popen", Mock(side_effect=OSError)):
+            self.plugin = self.new_plugin()
+            self.assertTrue(self.plugin.errorLog.called)
+            self.plugin.errorLog.reset_mock()
+            self.plugin.shutdown()
 
-class TestException(Exception):
-    pass
-
-class PluginBaseForTest(object):
-    def __init__(self, pid, name, version, prefs):
-        self.pluginPrefs = prefs
-
-def substitute(self, string, validateOnly=False):
-    if validateOnly:
-        return (True, string)
-    else:
-        return string
-
-class DeviceForTest(object):
-    """ Mockup of indigo.device, for testing """
-    def __init__(self, dev_id, name, props):
-        self.id = dev_id
-        self.name = name
-        self.pluginProps = props
-        self.states = {}
-        self.configured = True
-        self.enabled = True
-    def updateStateOnServer(self, key=None, value=None, clearErrorState=True):
-        assert key is not None
-        assert value is not None
-        self.states[key] = value
-    def replacePluginPropsOnServer(self, props):
-        self.pluginProps = props
-    def refreshFromServer(self):
-        pass
-
-class IndigoDictForTest(dict):
-    def iter(self, whatever):
-        return self.values()
-
-
-class IndigoMockTestCase(TestCase):
-    """ Mock indigo so the plugin can be imported """
-    def setUp(self):
-        self.indigo_mock = MagicMock()
-        self.indigo_mock.Dict = dict
-        self.indigo_mock.PluginBase = PluginBaseForTest
-        self.indigo_mock.devices = IndigoDictForTest()
-        #self.indigo_mock.server.log.side_effect = print
-
-        modules = sys.modules.copy()
-        modules["indigo"] = self.indigo_mock
-        self.module_patcher = patch.dict("sys.modules", modules)
-        self.module_patcher.start()
-        import plugin
-        self.plugin_module = plugin
-        self.plugin_module.indigo.PluginBase = PluginBaseForTest
-
-    def tearDown(self):
-        self.module_patcher.stop()
-
-class PluginTestCase(IndigoMockTestCase):
-    def setUp(self):
-        IndigoMockTestCase.setUp(self)
-        PluginBaseForTest.pluginPrefs = {u"showDebugInfo" : False,
-                                         u"showJomnilinkIIDebugInfo" : False}
-        PluginBaseForTest.debugLog = Mock()
-        PluginBaseForTest.errorLog = Mock(side_effect=print)
-        PluginBaseForTest.sleep = Mock()
-        PluginBaseForTest.substitute = substitute
-
+    def test_Shutdown_Handles_Exceptions(self):
         self.plugin = self.new_plugin()
-        self.assertFalse(PluginBaseForTest.errorLog.called)
-
-    def tearDown(self):
+        self.gateway_mock.shutdown.side_effect = Py4JError
         self.plugin.shutdown()
-        PluginBaseForTest.debugLog.side_effect=None
-        PluginBaseForTest.errorLog.side_effect=None
-        IndigoMockTestCase.tearDown(self)
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
 
-    def new_plugin(self):
-        # Before I created this function,
-        # python was giving me a bizillion "NoneType object has no
-        # attribute" warnings, I think because tearDown is called,
-        # removing the base class, before the plugin objects are deleted.
-        # why this fixed it is a mystery to me
-        props = {}
-        props["showDebugInfo"] = False
-        props["showJomnilinkIIDebugInfo"] = False
-        with open(os.path.join(testpath, "omni.txt"), "r") as keyfile:
-            # In order to test communication with your omni system, put its
-            # connection parameters (ip address, port, encryption key) in a
-            # three line text file called omni.txt in the test directory
-            lines = keyfile.readlines()
-            props["ipAddress"] = lines[0].strip()
-            props["portNumber"] = lines[1].strip()
-            props["encryptionKey1"] = lines[2][:23]
-            props["encryptionKey2"] = lines[2][24:47]
-            
-        plugin = self.plugin_module.Plugin("", "", _VERSION, props)
-        plugin.startup()
-        self.assertFalse(PluginBaseForTest.errorLog.called)
-        return plugin
+class PluginCoreFunctionalityTestCase(PluginTestCase):
 
     def test_DebugMenuItem_Toggles(self):
         self.plugin.debug = False
@@ -144,96 +52,136 @@ class PluginTestCase(IndigoMockTestCase):
         self.plugin.toggleDebugging()
         self.assertEqual(self.plugin.debugLog.call_count, 3)
         self.assertFalse(self.plugin.debug)
-        self.assertFalse(PluginBaseForTest.errorLog.called)
+        self.assertFalse(self.plugin.errorLog.called)
+
+    def test_RunConcurrentThread_Stops(self):
+        self.run_concurrent_thread(5)
 
     def test_JomnilinkIIDebugMenuItem_Toggles(self):
-        self.plugin.debug_jomnilinkII = False
+        self.plugin.debug_omni = False
         self.plugin.debugLog.reset_mock()
         self.plugin.toggleJomnilinkIIDebugging()
         self.assertEqual(self.plugin.debugLog.call_count, 1)
-        self.assertTrue(self.plugin.debug_jomnilinkII)
+        self.assertTrue(self.plugin.debug_omni)
 
         self.plugin.toggleJomnilinkIIDebugging()
         self.assertEqual(self.plugin.debugLog.call_count, 2)
-        self.assertFalse(self.plugin.debug_jomnilinkII)
-        self.assertFalse(PluginBaseForTest.errorLog.called)
+        self.assertFalse(self.plugin.debug_omni)
+        self.assertFalse(self.plugin.errorLog.called)
 
     def test_PreferencesUIValidation_Succeeds_OnValidInput(self):
         values = {"showDebugInfo" : True,
-                  "showJomnilinkIIDebugInfo" : True,
-                  "ipAddress" : "192.168.1.42",
+                  "showJomnilinkIIDebugInfo" : True}
+        ok, d, e = self.plugin.validatePrefsConfigUi(values)
+        self.assertTrue(ok)
+        values["showDebugInfo"] = False
+        ok, d, e = self.plugin.validatePrefsConfigUi(values)
+        self.assertTrue(ok)
+        self.assertFalse(self.plugin.errorLog.called)
+
+    # this should match the inital state in Device_Factory.xml
+    dialog_flags = {"isConnected": False,
+                   "error" : False,
+                   "connectionError" : False,
+                   "ipAddressError" : False,
+                   "portNumberError" : False,
+                   "encryptionKey1Error" : False,
+                   "encryptionKey2Error" : False}
+                   
+
+    def test_DeviceFactoryUIValidation_Succeeds_OnValidInput(self):
+        values = {"ipAddress" : "192.168.1.42",
                   "portNumber" : "4444",
                   "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
                   "encryptionKey2" : "01-23-45-67-89-AB-CD-EF"}
-        ok, d = self.plugin.validatePrefsConfigUi(values)
+        values.update(self.dialog_flags)
+        ok, d, e = self.plugin.validateDeviceFactoryUi(values, [])
         self.assertTrue(ok)
-        values["showDebugInfo"] = False
-        ok, d = self.plugin.validatePrefsConfigUi(values)
-        self.assertTrue(ok)
-        self.assertFalse(PluginBaseForTest.errorLog.called)
+        self.assertFalse(self.plugin.errorLog.called)
 
-    def test_PreferencesUIValidation_Fails_OnInvalidInput(self):
-        test_values = [
-            {"showDebugInfo" : False,
-             "showJomnilinkIIDebugInfo": False,
-              "ipAddress" : "not an ip address",
-              "portNumber" : "not a port",
-              "encryptionKey1" : "not an encryption key",
-              "encryptionKey2" : "still not an encryption key"}
-            ]
+    def test_DeviceFactoryUIValidation_Fails_OnInvalidInput(self):
+        values = {"ipAddress" : "not an ip address",
+                  "portNumber" : "not a port",
+                  "encryptionKey1" : "not an encryption key",
+                  "encryptionKey2" : "still not an encryption key"}
+        values.update(self.dialog_flags)
+
         keys = ["ipAddress", "portNumber", "encryptionKey1", "encryptionKey2"]
-        for values in test_values:
-            ok, d, e = self.plugin.validatePrefsConfigUi(values)
-            self.assertFalse(ok)
-            for k in keys:
-                self.assertTrue(k in e)
-                
-    def test_DeviceStartComm_Succeeds_OnValidInput(self):
-        self.make_and_start_a_test_device(1, "dev1",
-                                          {"deviceVersion":_VERSION})
-        self.assertFalse(PluginBaseForTest.errorLog.called)
-
-    def test_DeviceStopComm_Succeeds(self):
-        dev = self.make_and_start_a_test_device(
-            1, "d1",
-            {"deviceVersion":_VERSION},
-            time=1)
-
-        self.plugin.deviceStopComm(dev)
-        self.assertFalse(PluginBaseForTest.errorLog.called)
-
-    def make_and_start_a_test_device(self, dev_id, name, props,
-                                     time=concurrent_thread_time):
-        dev = DeviceForTest(dev_id, name, props)
-        self.indigo_mock.devices[dev_id] = dev
-        self.plugin.deviceStartComm(dev)
-        self.run_concurrent_thread(time)
-        return dev
-
-    def run_concurrent_thread(self, time_limit):
-        self.plugin.StopThread = TestException
-        starttime = datetime.datetime.now()
-        stoptime = starttime + datetime.timedelta(seconds=time_limit)
-        
-        def sleep(seconds):
-            now = datetime.datetime.now()
-            if now > stoptime:
-                raise TestException("done")
-            time.sleep(seconds)
-
-        self.plugin.sleep = sleep
-        t = Thread(target=self.plugin.runConcurrentThread)
-        t.start()
-        t.join(time_limit + 0.3)
-        self.assertFalse(t.is_alive())
-
-    def asserts_for_UIValidation_Failure(self, tag, tup):
-        self.assertEqual(len(tup), 3)
-        ok, val, errs = tup
+        ok, d, e = self.plugin.validateDeviceFactoryUi(values, [])
         self.assertFalse(ok)
-        if tag:
-            self.assertTrue(tag in errs)
-            self.assertTrue(errs[tag])
+        for k in keys:
+            self.assertTrue(k in e)
+
+    def test_makeConnection_ClearsErrorState_OnValidInput(self):
+        values = {"ipAddress" : "192.168.1.42",
+                  "portNumber" : "4444",
+                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF"}
+        errors = {"ipAddressError" : True,
+                  "portError": True,
+                  "encryptionKey1Error" : True,
+                  "encryptionKey2Error" : True,
+                  "error" : True}
+        values.update(self.dialog_flags)
+        values.update(errors)
+        
+        values = self.plugin.makeConnection(values, [])
+        self.assertFalse(values["error"])
+        keys = ["ipAddress", "portNumber", "encryptionKey1", "encryptionKey2"]
+        for k in keys:
+            self.assertFalse(values[k + "Error"])
+        self.assertFalse(values["connectionError"])
+        self.assertTrue(values["isConnected"])
+
+    def test_makeConnection_SetsErrorState_OnInvalidInput(self):
+        values = {"ipAddress" : "not an ip address",
+                  "portNumber" : "not a port",
+                  "encryptionKey1" : "not an encryption key",
+                  "encryptionKey2" : "still not an encryption key"}
+        values.update(self.dialog_flags)
+
+        values = self.plugin.makeConnection(values, [])
+        self.assertTrue(values["error"])
+        keys = ["ipAddress", "portNumber", "encryptionKey1", "encryptionKey2"]
+        for k in keys:
+            self.assertTrue(values[k + "Error"])
+        self.assertTrue(values["error"])
+        self.assertFalse(values["isConnected"])
+
+    def test_makeConnection_SetsErrorState_OnFailureToConnect(self):
+        values = {"ipAddress" : "192.168.1.42",
+                  "portNumber" : "4444",
+                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF"}
+        values.update(self.dialog_flags)
+
+        self.jomnilinkII_mock.Connection.side_effect = TestException
+        values = self.plugin.makeConnection(values, [])
+            
+        self.assertTrue(values["error"])
+        keys = ["ipAddress", "portNumber", "encryptionKey1", "encryptionKey2"]
+        for k in keys:
+            self.assertFalse(values[k + "Error"])
+        self.assertTrue(values["connectionError"])
+        self.assertFalse(values["isConnected"])
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
+
+    def test_GetDeviceFactoryUIValues_Handles_EmptyDeviceList(self):
+        values, errors = self.plugin.getDeviceFactoryUiValues([])
+        self.assertEqual(len(errors), 0)
+        self.assertTrue("isConnected" not in values or not values["isConnected"])
+
+    def test_GetDeviceFactoryUIValues_MakesConnection_GivenDevice(self):
+        values = {"ipAddress" : "192.168.1.42",
+                  "portNumber" : "4444",
+                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF"}
+        dev = self.plugin_module.indigo.device.create(Mock(), "none", values)
+        
+        values, errors = self.plugin.getDeviceFactoryUiValues([dev.id])
+        self.assertEqual(len(errors), 0)
+        self.assertTrue(values["isConnected"])
 
 
 if __name__ == "__main__":
