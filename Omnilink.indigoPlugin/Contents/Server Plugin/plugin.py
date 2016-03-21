@@ -34,6 +34,7 @@ import time
 import indigo
 import py4j
 from py4j.java_gateway import JavaGateway, CallbackServerParameters
+from py4j.protocol import Py4JError
 
 import extensions
 from extensions import ConnectionError
@@ -690,60 +691,56 @@ class Connection(object):
 
     @classmethod
     def startup(cls, timeout=5):
+        """ Try to launch the java runtime containing jomnilinkII and
+        build a py4j gateway to communicate with it. If successful, 
+        return stdout and stderr pipes from the Java subprocess. If 
+        not, log an error message and return None,None.
+        """
         if cls.javaproc is None:
-            cls.connect_to_java(timeout)
-        if cls.javaproc is None:
-            return None, None
-        else:
-            return cls.javaproc.stdout, cls.javaproc.stderr
+            try:
+                cls._connect_to_java(timeout)
+            except (OSError, ConnectionError, Py4JError):
+                log.error("Unable to communicate with jomnilinkII library")
+                log.debug("", exc_info=True)
+                return None, None
+                
+        return cls.javaproc.stdout, cls.javaproc.stderr
 
     @classmethod
-    def connect_to_java(cls, timeout):
-        try:
-            cls.javaproc = subprocess.Popen(
-                ["java",
-                 "-classpath",
-                 "java/lib/py4j/py4j0.9.1.jar:java/build/jar/OmniForPy.jar",
-                 "me.gazally.main.MainEntryPoint"],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except OSError:
-            log.error("Unable to start Java. "
-                      "You may need to install the Java JDK from oracle.com "
-                      "and then reload this plugin")
-            log.debug("", exc_info=True)
-            return
+    def _connect_to_java(cls, timeout):
+        cls.javaproc = subprocess.Popen(
+            ["jre/bin/java",
+             "-classpath",
+             "java/lib/py4j/py4j0.9.1.jar:java/build/jar/OmniForPy.jar",
+             "me.gazally.main.MainEntryPoint"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        log.debug("Java Runtime started")
 
-        cls.start_output_detection_thread()
+        cls._start_output_detection_thread()
         for i in range(timeout * 10):
             time.sleep(0.1)
             if cls.java_running:
                 log.debug("Java Gateway Server started")
                 break
         else:
-            log.error("Java Gateway Server did not start or is not "
-                      "communicating")
-            return
-
-        try:
-            cls.gateway = JavaGateway(
-                start_callback_server=True,
-                callback_server_parameters=CallbackServerParameters())
-        except:
-            log.error("Unable to communicate with Java Gateway Server")
-            log.debug("", exc_info=True)
+            raise ConnectionError("Failed to detect output from Java "
+                                      "runtime")
+        cls.gateway = JavaGateway(
+            start_callback_server=True,
+            callback_server_parameters=CallbackServerParameters())
 
     @classmethod
-    def start_output_detection_thread(cls):
+    def _start_output_detection_thread(cls):
         """ Connect the stdout pipes of our java subprocess to a thread that
         will set self.java_running to True when a line of output is read.
         """
-        t = threading.Thread(target=cls.wait_for_output,
+        t = threading.Thread(target=cls._wait_for_output,
                              name="Java Startup")
         t.setDaemon(True)
         t.start()
 
     @classmethod
-    def wait_for_output(cls):
+    def _wait_for_output(cls):
         """ Wait for a line of text to appear on the output pipe of the
         subprocess. Set self.java_running to True if a line is read or False
         if EOF is encountered first.
@@ -754,6 +751,7 @@ class Connection(object):
 
     @classmethod
     def shutdown(cls):
+        """ Tidy up """
         try:
             if cls.gateway is not None:
                 cls.gateway.shutdown()
