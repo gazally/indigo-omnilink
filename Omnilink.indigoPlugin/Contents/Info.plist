@@ -9,7 +9,7 @@
 	<key>IwsApiVersion</key>
 	<string>1.0.0</string>
 	<key>CFBundleDisplayName</key>
-	<string>Omni Link</string>
+	<string>OmniLink</string>
 	<key>CFBundleIdentifier</key>
 	<string>me.gazally.indigoplugin.omnilink</string>
 	<key>CFBundleVersion</key>
