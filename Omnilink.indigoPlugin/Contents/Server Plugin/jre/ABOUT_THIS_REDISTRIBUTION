@@ -1,0 +1,1 @@
+Per the Java 8 readme at http://www.oracle.com/technetwork/java/javase/jre-8-readme-2095710.html, I have deleted all the JavaFX related files. To reduce file size, I have also compressed lib/rt.jar.

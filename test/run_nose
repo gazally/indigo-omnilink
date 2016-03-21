@@ -1,0 +1,1 @@
+nosetests -m '(?:\b)[Tt]est' -verbosity=3 --nologcapture

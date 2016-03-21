@@ -1,0 +1,8 @@
+<MenuItem id="toggleDebugging">
+  <Name>Toggle Debugging</Name>
+  <CallbackMethod>toggleDebugging</CallbackMethod>
+</MenuItem>
+<MenuItem id="toggleJomnilinkIIDebugging">
+  <Name>Toggle Debugging of OMNI Network Communication</Name>
+  <CallbackMethod>toggleJomnilinkIIDebugging</CallbackMethod>
+</MenuItem>

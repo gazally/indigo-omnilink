@@ -1,3 +1,210 @@
 <?xml version="1.0"?>
 <Devices>
+<Device type="custom" id="omniControllerDevice">
+  <Name>Omni Controller</Name>
+  <States>
+    <State id="connected">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Connected:</TriggerLabel>
+      <ControlPageLabel>Connected:</ControlPageLabel>
+    </State>
+    <State id="model">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Model:</TriggerLabel>
+      <ControlPageLabel>Model:</ControlPageLabel>
+    </State>
+    <State id="firmwareVersion">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Firmware Version:</TriggerLabel>
+      <ControlPageLabel>Firmware Version:</ControlPageLabel>
+    </State>
+    <State id="batteryReading">
+      <ValueType>Number</ValueType>
+      <TriggerLabel>Battery Reading:</TriggerLabel>
+      <ControlPageLabel>Battery Reading:</ControlPageLabel>
+    </State>
+    <State id="freezeTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Freeze Trouble:</TriggerLabel>
+      <ControlPageLabel>Freeze Trouble:</ControlPageLabel>
+    </State>
+    <State id="batteryLowTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Battery Low Trouble:</TriggerLabel>
+      <ControlPageLabel>Battery Low Trouble:</ControlPageLabel>
+    </State>
+    <State id="ACPowerTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>AC Power Trouble:</TriggerLabel>
+      <ControlPageLabel>AC Power Trouble:</ControlPageLabel>
+    </State>
+    <State id="phoneLineTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Phone Line Trouble:</TriggerLabel>
+      <ControlPageLabel>Phone Line Trouble:</ControlPageLabel>
+    </State>
+    <State id="digitalCommunicatorTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Digital Communicator Trouble:</TriggerLabel>
+      <ControlPageLabel>Digital Communicator Trouble:</ControlPageLabel>
+    </State>
+    <State id="fuseTrouble">
+      <ValueType boolType="YesNo">Boolean</ValueType>
+      <TriggerLabel>Fuse Trouble:</TriggerLabel>
+      <ControlPageLabel>Fuse Trouble:</ControlPageLabel>
+    </State>
+  </States>
+  <UiDisplayStateId>connected</UiDisplayStateId>  
+</Device>
+    
+<DeviceFactory>
+  <Name>Define Omni System Device Group</Name>
+  <ButtonTitle>Close</ButtonTitle>
+  <ConfigUI>
+    <Field id="explanation" type="label">
+      <Label>Please enter the following information from the Setup menu on your Omni system keypad:</Label>
+    </Field>
+    <Field id="ipAddress" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
+      <Label>IP Address:</Label>
+    </Field>
+    <Field id="portNumber" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
+      <Label>Port:</Label>
+    </Field>
+    <Field id="encryptionKey1" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
+      <Label>Encryption Key Part 1:</Label>
+    </Field>
+    <Field id="encryptionKey2" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
+      <Label>Encryption Key Part 2:</Label>
+    </Field>
+    <Field id="connect" type="button" enabledBindingId="isConnected" enabledBindingNegate="true">
+      <Title>Connect to Omni System</Title>
+      <CallbackMethod>makeConnection</CallbackMethod>
+    </Field>
+    <Field id="connectHelp" type="label" fontSize="small" alignWithControl="true" visibleBindingId="isConnected" visibleBindingValue="false">
+      <Label>It may take a few moments to connect with your Omni Controller.</Label>
+    </Field>
+    <Field id="connectSuccess" type="label" fontSize="small" alignWithControl="true" visibleBindingId="isConnected" visibleBindingValue="true">
+      <Label>Your Omni Controller is communicating with Indigo.</Label>
+    </Field>
+    
+    <Field id="deviceFactoryVersion" type="textfield" hidden="true" devaultValue="0.1.0"/>
+
+    <Field id="isConnected" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="error" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="connectionError" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="ipAddressError" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="portNumberError" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="encryptionKey1Error" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="encryptionKey2Error" type="checkbox" hidden="true" defaultValue="false"/>
+
+    <Field type="separator" id="sep1"/>
+
+    <Field id="howto" type="label" visibleBindingId="error" visibleBindingValue="false">
+      <Label>Select the capabilities of your Omni System which you would like to use and press the Create button below to automatically create Indigo devices:</Label>
+    </Field>
+    <Field id="deviceGroupList" type="list" enabledBindingId="isConnected" visibleBindingId="error" visibleBindingValue="false" dynamicReload="true">
+      <Label>Device types:</Label>
+      <List class="self" method="getDeviceGroupList" dynamicReload="true" />
+    </Field>
+    <Field id="addDevices" type="button" enabledBindingId="deviceGroupList" visibleBindingId="error" visibleBindingValue="false"> 
+      <Title>Create Selected Device Types</Title>
+      <CallbackMethod>createDevices</CallbackMethod>
+    </Field>
+    <Field id="removeDevices" type="button" enabledBindingId="deviceGroupList" visibleBindingId="error" visibleBindingValue="false">>
+      <Title>Remove Selected Device Types</Title>
+      <CallbackMethod>removeDevices</CallbackMethod>
+    </Field>
+
+    <Field id="connectionErrorMessage" type="label" fontColor="red" visibleBindingId="connectionError" visibleBindingValue="true">
+      <Label>Unable to connect with your Omni system. Please recheck the information from the Setup menu, as well as your network cable and firmware version.</Label>
+    </Field>
+    <Field id="ipAddressErrorMessage" type="label" fontColor="red" visibleBindingId="ipAddressError" visibleBindingValue="true">
+      <Label>Please enter the controller IP address from the Setup menu on your Omni system keypad.</Label>
+    </Field>
+    <Field id="portNumberErrorMessage" type="label" fontColor="red" visibleBindingId="portNumberError" visibleBindingValue="true">
+      <Label>Please enter the controller port number from the Setup menu on your Omni system keypad.</Label>
+    </Field>
+    <Field id="encryptionKey1ErrorMessage" type="label" fontColor="red" visibleBindingId="encryptionKey1Error" visibleBindingValue="true">
+      <Label>Please enter the encryption key part 1 from the Setup menu on your Omni system keypad.</Label>
+    </Field>
+    <Field id="encryptionKey2ErrorMessage" type="label" fontColor="red" visibleBindingId="encryptionKey2Error" visibleBindingValue="true">
+      <Label>Please enter the encryption key part 2 from the Setup menu on your Omni system keypad.</Label>
+    </Field>
+    
+    <Field type="separator" id="sep2"/>
+    
+    <Field id="nameDescription" type="label">
+      <Label>Automatically create names for new devices starting with:</Label>
+    </Field>
+    <Field id="prefix" type="textfield" defaultValue="Omni">
+      <Label>Prefix:</Label>
+    </Field>
+  </ConfigUI>
+</DeviceFactory>
+<Device type="custom" id="omniZoneDevice">
+  <Name>Omni II Zone</Name>
+  <States>
+    <State id="number">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Number:</TriggerLabel>
+      <ControlPageLabel>Number:</ControlPageLabel>
+    </State>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name:</TriggerLabel>
+      <ControlPageLabel>Name:</ControlPageLabel>
+    </State>
+    <State id="crossZoning">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Cross Zoning Setting:</TriggerLabel>
+      <ControlPageLabel>Cross Zoning Setting:</ControlPageLabel>
+    </State>
+    <State id="swingerShutdown">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Swinger Shutdown Setting:</TriggerLabel>
+      <ControlPageLabel>Swinger Shutdown Setting:</ControlPageLabel>
+    </State>
+    <State id="dialOutDelay">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Dial Out Delay Setting:</TriggerLabel>
+      <ControlPageLabel>Dial Out Delay Setting:</ControlPageLabel>
+    </State>
+    <State id="type">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Type:</TriggerLabel>
+      <ControlPageLabel>Type:</ControlPageLabel>
+    </State>
+    <State id="area">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Area:</TriggerLabel>
+      <ControlPageLabel>Area:</ControlPageLabel>
+    </State>
+    <State id="loop">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Analog Loop Reading:</TriggerLabel>
+      <ControlPageLabel>Analog Loop Reading:</ControlPageLabel>
+    </State>
+    <State id="condition">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Condition:</TriggerLabel>
+      <ControlPageLabel>Condition:</ControlPageLabel>
+    </State>
+    <State id="alarmStatus">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Alarm Status:</TriggerLabel>
+      <ControlPageLabel>Alarm Status:</ControlPageLabel>
+    </State>
+    <State id="armingStatus">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Arming Status:</TriggerLabel>
+      <ControlPageLabel>Arming Status:</ControlPageLabel>
+    </State>
+    <State id="hadTrouble">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Had Trouble:</TriggerLabel>
+      <ControlPageLabel>Had Trouble:</ControlPageLabel>
+    </State>
+  </States>
+  <UiDisplayStateId>condition</UiDisplayStateId>  
+</Device>
 </Devices>
