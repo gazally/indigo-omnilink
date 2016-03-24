@@ -512,7 +512,7 @@ delegator_definitions = [
      "typeId", "", ["self", "valuesDict", "typeId", "devId"]),
 
     ("closedActionConfigUi", "action",
-     "typeId", "", ["self, valuesDict", "userCancelled", "typeId",
+     "typeId", "", ["self", "valuesDict", "userCancelled", "typeId",
                     "actionId"]),
 
     ("closedEventConfigUi", "event",
@@ -586,7 +586,8 @@ def make_delegator_func(name, selector, arg_name, arg_attr, argspec):
             if hasattr(ext, name):
                 return getattr(ext, name)(*args, **kwargs)
         else:
-            log.debug("No matching plugin extension found for " + name)
+            log.debug("No matching plugin extension found for {0} {1} "
+                      "method {2}".format(selector, id, name))
 
         return getattr(indigo.PluginBase, name)(self, *args, **kwargs)
 
@@ -692,8 +693,8 @@ class Connection(object):
     @classmethod
     def startup(cls, timeout=5):
         """ Try to launch the java runtime containing jomnilinkII and
-        build a py4j gateway to communicate with it. If successful, 
-        return stdout and stderr pipes from the Java subprocess. If 
+        build a py4j gateway to communicate with it. If successful,
+        return stdout and stderr pipes from the Java subprocess. If
         not, log an error message and return None,None.
         """
         if cls.javaproc is None:
@@ -703,7 +704,7 @@ class Connection(object):
                 log.error("Unable to communicate with jomnilinkII library")
                 log.debug("", exc_info=True)
                 return None, None
-                
+
         return cls.javaproc.stdout, cls.javaproc.stderr
 
     @classmethod
@@ -723,8 +724,7 @@ class Connection(object):
                 log.debug("Java Gateway Server started")
                 break
         else:
-            raise ConnectionError("Failed to detect output from Java "
-                                      "runtime")
+            raise ConnectionError("Failed to detect output from Java runtime")
         cls.gateway = JavaGateway(
             start_callback_server=True,
             callback_server_parameters=CallbackServerParameters())
