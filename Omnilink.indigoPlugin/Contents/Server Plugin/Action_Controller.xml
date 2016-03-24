@@ -1,5 +1,3 @@
-<?xml version="1.0"?>
-<Actions>
 <Action id="checkSecurityCode" deviceFilter="self.omniControllerDevice">
   <Name>Validate a Security Code</Name>
   <CallbackMethod>checkSecurityCode</CallbackMethod>
@@ -20,4 +18,3 @@
     <Field id = "actionVersion" type="textfield" defaultValue="0.2.0" hidden="true"/>
   </ConfigUI>
 </Action>
-</Actions>

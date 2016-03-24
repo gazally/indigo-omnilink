@@ -19,6 +19,7 @@
 """ Omni Plugin extension for Controller Devices """
 from __future__ import unicode_literals
 from collections import namedtuple
+from distutils.version import StrictVersion
 import logging
 
 import indigo
@@ -29,7 +30,7 @@ from extensions import ConnectionError
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.1.0"
+_VERSION = "0.2.0"
 
 # to do -- update the battery reading periodically (like once a day)
 # action - console beepers enable/disable/beep n times
@@ -45,11 +46,12 @@ class ControllerExtension(extensions.PluginExtension):
     """Omni plugin extension for Controller devices """
     def __init__(self):
         self.type_ids = {"device": ["omniControllerDevice"],
-                         "action": [],
+                         "action": ["checkSecurityCode"],
                          "event": []}
         self.devices = []
         self.callbacks = {
-            "writeControllerInfoToLog": self.writeControllerInfoToLog
+            "writeControllerInfoToLog": self.writeControllerInfoToLog,
+            "checkSecurityCode": self.checkSecurityCode
         }
         self.controller_info = {}
 
@@ -58,11 +60,37 @@ class ControllerExtension(extensions.PluginExtension):
     def deviceStartComm(self, device):
         """ start an omniControllerDevice. Query the Omni system and set
         the states of the indigo device. """
+        log.debug("Starting device {0}".format(device.id))
         if device not in self.devices:
             self.devices.append(device)
-        self.update_device_status(device)
+            self.update_device_version(device)
+            self.update_device_status(device)
+
+    def update_device_version(self, device):
+        """ if the device was defined in a previous version of this plugin,
+        update it and change the version number. Note that
+        replacePluginPropsOnServer calls deviceStartComm, so it's important
+        to avoid calling it if nothing needs to be changed.
+        """
+        device_version = device.pluginProps.get("deviceVersion", "0.0")
+        if (StrictVersion(device_version) >= StrictVersion(_VERSION)):
+            return
+
+        log.debug("Updating device {0} from version {1} "
+                  "to version {2}".format(device.id, device_version,
+                                          _VERSION))
+        device.stateListOrDisplayStateIdChanged()
+
+        # device.pluginProps always creates a copy of itself
+        props = device.pluginProps
+        props["deviceVersion"] = _VERSION
+        device.replacePluginPropsOnServer(props)
 
     def update_device_status(self, device):
+        """ Ask the controller for information and set the
+        device states accordingly, and clear the last checked
+        security code.
+        """
         connection = self.plugin.make_connection(device.pluginProps)
         try:
             info = self.get_controller_info(connection)
@@ -70,6 +98,9 @@ class ControllerExtension(extensions.PluginExtension):
             device.updateStateOnServer("model", info.model)
             device.updateStateOnServer("firmwareVersion", info.firmware)
             device.updateStateOnServer("batteryReading", info.battery_reading)
+
+            self.update_last_checked_code(device)
+
             for t, value in info.troubles.items():
                 device.updateStateOnServer(t, value)
             device.setErrorStateOnServer(None)
@@ -79,6 +110,28 @@ class ControllerExtension(extensions.PluginExtension):
             log.debug("", exc_info=True)
             device.updateStateOnServer("connected", False)
             device.setErrorStateOnServer("not connected")
+
+    authority = {0: "Invalid",
+                 1: "Master",
+                 2: "Manager",
+                 3: "User",
+                 "N/A": "N/A",
+                 "Error": "Error"}
+
+    def update_last_checked_code(self, device,
+                                 code="None", area="None",
+                                 authority="N/A", user="N/A"):
+        """ Set device states for the last checked security code.
+        Defaults are for initialization when no code has been
+        checked yet.
+        """
+        device.updateStateOnServer("lastCheckedCodeArea", area)
+        device.updateStateOnServer("lastCheckedCodeAuthority",
+                                   self.authority.get(authority,
+                                                      "Unknown"))
+        device.updateStateOnServer("lastCheckedCodeUser", user)
+        device.updateStateOnServer("lastCheckedCodeDuress", user == 251)
+        device.updateStateOnServer("lastCheckedCode", code)
 
     models = {30: "HAI Omni IIe",
               16: "HAI OmniPro II",
@@ -182,6 +235,99 @@ class ControllerExtension(extensions.PluginExtension):
                 dev.updateStateOnServer("connected", False)
                 dev.setErrorStateOnServer("not connected")
 
+    # ----- Action Item Config UI ----- #
+
+    def getActionConfigUiValues(self, values, type_id, device_id):
+        """ called by the Indigo UI before the Action configuration dialog
+        is shown to the user.
+        """
+        errors = indigo.Dict()
+        values["device_id"] = device_id
+        return (values, errors)
+
+    def validateActionConfigUi(self, values, type_id, action_id):
+        """ called by the Indigo UI to validate the values dictionary
+        for the Action user interface dialog
+        """
+        log.debug("Action Validation called for %s" % type_id)
+        errors = indigo.Dict()
+
+        if (StrictVersion(values.get("actionVersion", "0.0")) <
+                StrictVersion(_VERSION)):
+            values["actionVersion"] = _VERSION
+
+        code = values["code"]
+        if "%%" in code:
+            self.validate_substitution(values, errors, "code")
+        elif not self.is_valid_code(code):
+            errors["code"] = "Security codes must be four digits: 0001 to 9999"
+
+        area = values["area"]
+        if "%%" in area:
+            self.validate_substitution(values, errors, "area")
+        elif not self.is_valid_area(area):
+            errors["area"] = ("Please enter the area number in which to check "
+                              "the security code")
+
+        return (not errors, values, errors)
+
+    def validate_substitution(self, values, errors, field):
+        tup = self.plugin.substitute(values[field], validateOnly=True)
+        valid = tup[0]
+        if not valid:
+            errors[field] = tup[1]
+
+    def is_valid_code(self, code):
+        return (len(code) == 4 and
+                code != "0000" and
+                all(['0' <= ch <= '9' for ch in code]))
+
+    def is_valid_area(self, area):
+        try:
+            if int(area) < 1 or int(area) > 255:
+                return False
+        except ValueError:
+            return False
+        return True
+
+    # ----- Action Item Callbacks ----- #
+
+    def checkSecurityCode(self, action):
+        """ Callback for Validate Security Code action
+        """
+        dev = indigo.devices[action.deviceId]
+        code = self.plugin.substitute(action.props.get("code", ""))
+        area = self.plugin.substitute(action.props.get("area", ""))
+
+        if not self.is_valid_code(code):
+            log.error("checkSecurityCode asked to validate "
+                      "'{0}' which is not between 0001 and 9999".format(code))
+        elif not self.is_valid_area(area):
+            log.error("checkSecurityCode asked to validate code in area "
+                      "{0} which is not between 1 and 255".format(area))
+        else:
+            try:
+                c = self.plugin.make_connection(dev.pluginProps)
+                scv = c.omni.reqSecurityCodeValidation(
+                    int(area), *[ord(ch) - ord("0") for ch in code])
+
+                self.update_last_checked_code(
+                    dev, code=code, area=area,
+                    authority=scv.getAuthorityLevel(),
+                    user=scv.getCodeNumber())
+                log.debug("code {0} has authority {1} in area {2} "
+                          "user number {3}".format(
+                              code, scv.getAuthorityLevel(), area,
+                              scv.getCodeNumber()))
+                return
+
+            except Py4JError, ConnectionError:
+                log.error("Error communicating with Omni Controller")
+                log.debug("", exc_info=True)
+
+        self.update_last_checked_code(dev, code=code, area=area,
+                                      authority="Error")
+
     # ----- Menu Item Callbacks ----- #
 
     def writeControllerInfoToLog(self):
@@ -191,7 +337,7 @@ class ControllerExtension(extensions.PluginExtension):
         first = True
         for c in self.plugin.connections.values():
             if not c.is_connected():
-                msg = "OMNI Controller at {0} is not connected".format(c.ip)
+                msg = "OMNI Controller at {0} is not connected ".format(c.ip)
                 if c.javaproc is None:
                     msg = msg + ("because the Java subprocess could not be "
                                  "started.")

@@ -69,6 +69,8 @@ class DeviceForTest(object):
         pass
     def replaceOnServer(self):
         pass
+    def stateListOrDisplayStateIdChanged(self):
+        pass
 
 
 

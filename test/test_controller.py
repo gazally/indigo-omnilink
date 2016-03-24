@@ -24,41 +24,47 @@ from mock import Mock, MagicMock
 
 from fixtures_for_test import *
 
-import indigo  # This must come after fixtures_for_test because it
-               # is mocked up by fixtures_for_test
+# This must come after fixtures_for_test because it is mocked up by
+# fixtures_for_test
+import indigo
+
+_VERSION = "0.2.0"
+
 
 class ControllerDeviceTestCase(PluginTestCase):
     def setUp(self):
         PluginTestCase.setUp(self)
 
     def test_GetDeviceList_ReturnsController(self):
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix":""}
+        values = {"ipAddress": "192.168.1.42",
+                  "portNumber": "4444",
+                  "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                  "prefix": ""}
         values.update(self.dialog_flags)
         values = self.plugin.makeConnection(values, [])
         result = self.plugin.getDeviceGroupList(None, values, [])
         self.assertTrue(("omniControllerDevice", "Controller") in result)
 
     def test_CreateDevices_CreatesOnlyOneController(self):
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix" : ""}
+        values = {"ipAddress": "192.168.1.42",
+                  "portNumber": "4444",
+                  "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                  "prefix": ""}
         values.update(self.dialog_flags)
         values = self.plugin.makeConnection(values, [])
         values["deviceGroupList"] = ["omniControllerDevice"]
-        self.plugin.createDevices(values, [dev.id for dev in indigo.devices.values()])
-        self.assertEqual(len(set([dev for dev in indigo.devices.values()
-                                  if dev.deviceTypeId == "omniControllerDevice"])), 1)
-
-        self.plugin.createDevices(values, [dev.id for dev in indigo.devices.values()])
-
-        self.assertEqual(len(set([dev for dev in indigo.devices.values()
-                                  if dev.deviceTypeId == "omniControllerDevice"])), 1)
+        self.plugin.createDevices(values,
+                                  [dev.id for dev in indigo.devices.values()])
+        self.assertEqual(
+            len(set([dev for dev in indigo.devices.values()
+                     if dev.deviceTypeId == "omniControllerDevice"])), 1)
+        self.plugin.createDevices(values,
+                                  [dev.id for dev in indigo.devices.values()])
+        self.assertEqual(
+            len(set([dev for dev in indigo.devices.values()
+                     if dev.deviceTypeId == "omniControllerDevice"])), 1)
 
     def test_DeviceStartComm_Succeeds(self):
         self.mock_JomnilinkII_messages_for_deviceStartComm()
@@ -75,22 +81,33 @@ class ControllerDeviceTestCase(PluginTestCase):
                     "batteryLowTrouble": True,
                     "ACPowerTrouble": True,
                     "phoneLineTrouble": True,
-                    "digitalCommunicatorTrouble" : False,
-                     "fuseTrouble":False}
+                    "digitalCommunicatorTrouble": False,
+                    "fuseTrouble": False}
         for t, val in troubles.items():
             self.assertEqual(dev.states[t], val)
 
+    def test_DeviceStartComm_Updates_OldDevices(self):
+        self.mock_JomnilinkII_messages_for_deviceStartComm()
+        dev = self.create_controller_device()
+        del dev.pluginProps["deviceVersion"]
+
+        with patch.object(dev, "stateListOrDisplayStateIdChanged") as m:
+            self.plugin.deviceStartComm(dev)
+            self.assertTrue(m.called)
+        self.assertTrue("deviceVersion" in dev.pluginProps)
+
     def mock_JomnilinkII_messages_for_deviceStartComm(self, i=0):
         self.connection_mocks[i].reqSystemInformation = Mock(
-            return_value = JomnilinkII_SystemInformation_for_test(30, 2, 16, 2, ""))
+            return_value=JomnilinkII_SystemInformation_for_test(30, 2, 16, 2,
+                                                                ""))
         self.connection_mocks[i].reqSystemStatus = Mock(
-            return_value = JomnilinkII_SystemStatus_for_test(200))
+            return_value=JomnilinkII_SystemStatus_for_test(200))
         self.connection_mocks[i].reqSystemTroubles = Mock(
-            return_value = JomnilinkII_SystemTroubles_for_test([1, 2, 3, 4]))
+            return_value=JomnilinkII_SystemTroubles_for_test([1, 2, 3, 4]))
 
     def test_DeviceStartComm_Fails_OnNetworkError(self):
         self.connection_mock.reqSystemInformation = Mock(
-            side_effect = self.plugin_module.extensions.ConnectionError)
+            side_effect=self.plugin_module.extensions.ConnectionError)
         dev = self.create_controller_device()
         self.plugin.deviceStartComm(dev)
         self.assertTrue(dev.error_state is not None)
@@ -99,11 +116,12 @@ class ControllerDeviceTestCase(PluginTestCase):
 
     def test_DeviceStopComm_Succeeds(self):
         self.connection_mock.reqSystemInformation = Mock(
-            return_value = JomnilinkII_SystemInformation_for_test(37, 3, 0, 254, ""))
+            return_value=JomnilinkII_SystemInformation_for_test(37, 3, 0, 254,
+                                                                ""))
         self.connection_mock.reqSystemStatus = Mock(
-            return_value = JomnilinkII_SystemStatus_for_test(0))
+            return_value=JomnilinkII_SystemStatus_for_test(0))
         self.connection_mock.reqSystemTroubles = Mock(
-            return_value = JomnilinkII_SystemTroubles_for_test([5, 6]))
+            return_value=JomnilinkII_SystemTroubles_for_test([5, 6]))
         dev = self.create_controller_device()
         self.plugin.deviceStartComm(dev)
         self.assertFalse(self.plugin.errorLog.called)
@@ -114,38 +132,40 @@ class ControllerDeviceTestCase(PluginTestCase):
                     "batteryLowTrouble": False,
                     "ACPowerTrouble": False,
                     "phoneLineTrouble": False,
-                    "digitalCommunicatorTrouble" : True,
-                     "fuseTrouble":True}
+                    "digitalCommunicatorTrouble": True,
+                    "fuseTrouble": True}
         for t, val in troubles.items():
             self.assertEqual(dev.states[t], val)
         self.plugin.deviceStopComm(dev)
 
     def create_controller_device(self, values=None):
         if values is None:
-            values = {"ipAddress" : "192.168.1.42",
-                      "portNumber" : "4444",
-                      "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                      "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                      "prefix" : ""}
+            values = {"ipAddress": "192.168.1.42",
+                      "portNumber": "4444",
+                      "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                      "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                      "prefix": ""}
         values.update(self.dialog_flags)
         values = self.plugin.makeConnection(values, [])
         values["deviceGroupList"] = ["omniControllerDevice"]
-        self.plugin.createDevices(values, [dev.id for dev in set(indigo.devices.values())
-                                           if dev.pluginProps["ipAddress"] == values["ipAddress"]])
+        self.plugin.createDevices(
+            values,
+            [dev.id for dev in set(indigo.devices.values())
+             if dev.pluginProps["ipAddress"] == values["ipAddress"]])
         dev = [dev for dev in indigo.devices.values()
                if (dev.deviceTypeId == "omniControllerDevice" and
                    dev.pluginProps["ipAddress"] == values["ipAddress"])][0]
         return dev
 
-    def test_DisconnectNotification_SetsErrorState_OfCorrectControllerDevice(self):
+    def test_DisconnectNotification_SetsErrorState_OfCorrectController(self):
         for i in range(2):
             self.mock_JomnilinkII_messages_for_deviceStartComm(i)
         dev1 = self.create_controller_device()
         values = {"ipAddress": "10.0.0.2",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix" : ""}
+                  "portNumber": "4444",
+                  "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                  "prefix": ""}
         dev2 = self.create_controller_device(values)
         self.plugin.deviceStartComm(dev1)
         self.plugin.deviceStartComm(dev2)
@@ -166,9 +186,9 @@ class ControllerDeviceTestCase(PluginTestCase):
 
         self.assertTrue(dev.error_state is not None)
         self.connection_mocks[1].reqSystemTroubles = Mock(
-            return_value = JomnilinkII_SystemTroubles_for_test([5, 6]))
+            return_value=JomnilinkII_SystemTroubles_for_test([5, 6]))
 
-        self.plugin.update() # this should get the second connection object
+        self.plugin.update()  # this should get the second connection object
         self.assertTrue(dev.error_state is None)
         self.assertTrue(dev.states["digitalCommunicatorTrouble"])
 
@@ -182,7 +202,7 @@ class ControllerDeviceTestCase(PluginTestCase):
         mock_statuses = Mock()
         mock_statuses.getStatuses.return_value = [Mock()]
         mock_properties = self.create_reqObjProperties_Mock()
-        
+
         for cm in self.connection_mocks:
             cm.reqObjectTypeCapacities.return_value = mock_capacities
             cm.reqSystemTroubles.return_value = mock_troubles
@@ -190,52 +210,152 @@ class ControllerDeviceTestCase(PluginTestCase):
             cm.reqObjectStatus.return_value = mock_statuses
             cm.reqObjectProperties = mock_properties
 
-        values = {"ipAddress" : "192.168.1.99",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix" : ""}
+        values = {"ipAddress": "192.168.1.99",
+                  "portNumber": "4444",
+                  "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                  "prefix": ""}
         values.update(self.dialog_flags)
         self.plugin.makeConnection(values, [])
 
-        values = {"ipAddress" : "10.0.0.1",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix" : ""}
-        values.update(self.dialog_flags)        
+        values = {"ipAddress": "10.0.0.1",
+                  "portNumber": "4444",
+                  "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                  "prefix": ""}
+        values.update(self.dialog_flags)
         self.plugin.makeConnection(values, [])
         self.plugin.writeControllerInfoToLog()
 
     def create_reqObjProperties_Mock(self):
         self.jomnilinkII_mock.Message.MESG_TYPE_OBJ_PROP = 0x21
+
         class locals:
-            objs = [JomnilinkII_ObjectProperties_for_test(0, 1, "Thing 1", 0x21),
-                    JomnilinkII_ObjectProperties_for_test(0, 2, "Thing 2", 0x21),
+            objs = [JomnilinkII_ObjectProperties_for_test(0, 1, "Thing 1",
+                                                          0x21),
+                    JomnilinkII_ObjectProperties_for_test(0, 2, "Thing 2",
+                                                          0x21),
                     JomnilinkII_ObjectProperties_for_test(0, 0, "", 0)]
             index = 0
+
         def looper(a, b, c, d, e, f):
             retval = locals.objs[locals.index % len(locals.objs)]
             locals.index += 1
             return retval
-        reqfunc = Mock(side_effect = looper)
+        reqfunc = Mock(side_effect=looper)
         return reqfunc
-        
 
     def test_WriteControllerInfoToLog_Handles_NetworkError(self):
         self.connection_mock.reqSystemInformation = Mock(
-            side_effect = self.plugin_module.extensions.ConnectionError)
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix" : ""}
+            side_effect=self.plugin_module.extensions.ConnectionError)
+        values = {"ipAddress": "192.168.1.42",
+                  "portNumber": "4444",
+                  "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                  "prefix": ""}
         values.update(self.dialog_flags)
         self.plugin.makeConnection(values, [])
         self.assertFalse(self.plugin.errorLog.called)
+
         self.plugin.writeControllerInfoToLog()
         self.assertTrue(self.plugin.errorLog.called)
         self.plugin.errorLog.reset_mock()
+
+    def test_WriteControllerInfoToLog_Handles_FailedStartup(self):
+        values = {"ipAddress": "192.168.1.99",
+                  "portNumber": "4444",
+                  "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                  "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                  "prefix": ""}
+        values.update(self.dialog_flags)
+        self.plugin.makeConnection(values, [])
+        self.connection_mock.connected.return_value = False
+        self.plugin_module.indigo.server.log.reset_mock()
+
+        self.plugin.writeControllerInfoToLog()
+        self.assertTrue(self.plugin_module.indigo.server.log.call_count == 1)
+        args, kwargs = self.plugin_module.indigo.server.log.call_args
+        self.assertTrue("is not connected" in args[0])
+
+    def test_ValidateActionConfigUI_Catches_ObviousErrors(self):
+        self.mock_JomnilinkII_messages_for_deviceStartComm()
+        dev = self.create_controller_device()
+        self.plugin.deviceStartComm(dev)
+        values = {}
+        self.plugin.getActionConfigUiValues(values, "checkSecurityCode",
+                                            dev.id)
+
+        with patch.object(self.plugin_module.indigo.PluginBase, "substitute",
+                          return_value=(True, "")) as sub:
+
+            values["code"] = "%%blahblah"
+            values["area"] = "%%blahblah"
+            tup = self.plugin.validateActionConfigUi(values,
+                                                     "checkSecurityCode",
+                                                     1)
+            self.assertTrue(tup[0])
+            self.assertFalse(tup[2])
+            self.assertEqual(sub.call_count, 2)
+
+        test_values = [("123A", "hello"), ("", ""), ("0", "0")]
+        for code, area in test_values:
+            values["code"] = code
+            values["area"] = area
+            tup = self.plugin.validateActionConfigUi(values,
+                                                     "checkSecurityCode", 1)
+            self.assertFalse(tup[0])
+            self.assertTrue("code" in tup[2])
+            self.assertTrue("area" in tup[2])
+
+    def test_CheckSecurityCode_UpdatesDeviceStates_OnValidCode(self):
+        self.mock_JomnilinkII_messages_for_deviceStartComm()
+        dev = self.create_controller_device()
+        self.plugin.deviceStartComm(dev)
+
+        mock_scv = JomnilinkII_SecurityCodeValidation_for_test(16, 2)
+        self.connection_mock.reqSecurityCodeValidation = Mock(
+            return_value=mock_scv)
+
+        action = Mock()
+        action.deviceId = dev.id
+        action.props = {"code": "9876", "area": "1", "actionVersion": _VERSION}
+
+        self.plugin.checkSecurityCode(action)
+
+        self.connection_mock.reqSecurityCodeValidation.assert_called_with(
+            1, 9, 8, 7, 6)
+        self.assertEqual(dev.states["lastCheckedCode"], action.props["code"])
+        self.assertEqual(dev.states["lastCheckedCodeArea"],
+                         action.props["area"])
+        self.assertEqual(dev.states["lastCheckedCodeAuthority"], "Manager")
+        self.assertEqual(dev.states["lastCheckedCodeUser"], 16)
+        self.assertFalse(dev.states["lastCheckedCodeDuress"])
+
+    def test_CheckSecurityCode_HandlesNetworkError(self):
+        self.mock_JomnilinkII_messages_for_deviceStartComm()
+        dev = self.create_controller_device()
+        self.plugin.deviceStartComm(dev)
+
+        self.connection_mock.reqSecurityCodeValidation = Mock(
+            side_effect=self.plugin_module.py4j.protocol.Py4JError)
+
+        action = Mock()
+        action.deviceId = dev.id
+        action.props = {"code": "9876", "area": "1", "actionVersion": _VERSION}
+        self.assertFalse(self.plugin.errorLog.called)
+
+        self.plugin.checkSecurityCode(action)
+
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
+
+        self.assertEqual(dev.states["lastCheckedCode"], action.props["code"])
+        self.assertEqual(dev.states["lastCheckedCodeArea"],
+                         action.props["area"])
+        self.assertEqual(dev.states["lastCheckedCodeAuthority"], "Error")
+        self.assertEqual(dev.states["lastCheckedCodeUser"], "N/A")
+        self.assertFalse(dev.states["lastCheckedCodeDuress"])
+
 
 if __name__ == "__main__":
     unittest.main()

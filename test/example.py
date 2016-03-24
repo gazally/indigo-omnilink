@@ -139,13 +139,16 @@ def main():
 	count += 1
 
     print(c.uploadNames(Message.OBJ_TYPE_UNIT, 0).toString())
-    #print(c.reqSecurityCodeValidation(1, 1, 2, 3, 4).toString())
+
+    for i in range(1, 10000):
+        s = [ord(ch) - ord("0") for ch in "{0:04}".format(i)]
+        for a in range(1, 3):
+            scv = c.reqSecurityCodeValidation(a, *s)
+            if scv.getAuthorityLevel() != 0:
+                print("{0:04}/{1}: {2}", i, a, scv.toString())
 			
     print("All Done, OmniConnection thread now running")
 	
-    
-
-
     while True:
         sleep(10)
 
