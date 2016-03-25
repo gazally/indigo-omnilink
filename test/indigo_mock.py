@@ -34,16 +34,17 @@ class PluginBaseForTest(object):
 
     def deviceStartComm(self, dev):
         pass
+
     def deviceStopComm(self, dev):
         pass
 
-    
+
 class IndigoDictForTest(dict):
     """ Mockup of indigo.Dict, for testing """
     def iter(self, whatever):
         return self.values()
 
-    
+
 class DeviceForTest(object):
     """ Mockup of indigo.device, for testing """
     def __init__(self, dev_id, deviceTypeId, name, props):
@@ -57,22 +58,26 @@ class DeviceForTest(object):
         self.error_state = None
         self.model = ""
         self.subModel = ""
+
     def updateStateOnServer(self, key=None, value=None, clearErrorState=True):
         assert key is not None
         assert value is not None
         self.states[key] = value
-    def setErrorStateOnServer(self,msg):
+
+    def setErrorStateOnServer(self, msg):
         self.error_state = msg
+
     def replacePluginPropsOnServer(self, props):
         self.pluginProps = props
+
     def refreshFromServer(self):
         pass
+
     def replaceOnServer(self):
         pass
+
     def stateListOrDisplayStateIdChanged(self):
         pass
-
-
 
 mock_indigo = MagicMock()
 mock_indigo.Dict = dict
@@ -83,8 +88,9 @@ mock_indigo.server.log = Mock(side_effect=print)
 PluginBaseForTest.sleep = Mock()
 mock_indigo.devices = IndigoDictForTest()
 
-
 dev_id = 1000
+
+
 def create_device(protocol, deviceTypeId, props=None, name=None):
     global dev_id
     global mock_indigo
@@ -98,16 +104,17 @@ def create_device(protocol, deviceTypeId, props=None, name=None):
     mock_indigo.devices[name] = dev
     return dev
 
+
 def delete_device(device):
-    keys = [k for k,v in mock_indigo.devices.items() if v is device]
+    keys = [k for k, v in mock_indigo.devices.items() if v is device]
     for k in keys:
         del mock_indigo.devices[k]
+
 
 def reset():
     mock_indigo.devices = IndigoDictForTest()
     PluginBaseForTest.debugLog.reset_mock()
     PluginBaseForTest.errorLog.reset_mock()
-    
+
 mock_indigo.device.create = Mock(side_effect=create_device)
 mock_indigo.device.delete = Mock(side_effect=delete_device)
-

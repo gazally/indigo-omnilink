@@ -24,83 +24,112 @@ from mock import Mock, MagicMock
 
 from fixtures_for_test import *
 
-import indigo  # This must come after fixtures_for_test because it
-               # is mocked up by fixtures_for_test
+# This must come after fixtures_for_test because it
+# is mocked up by fixtures_for_test
+import indigo
 
-class ZoneDeviceTestCase(PluginTestCase):
+
+class MockObjPropAndStatusFixture(Fixture):
+    """ Depends on MockConnectionFixture """
+    def setUp(self, tc):
+        for cm in tc.connection_mocks:
+            cm.reqObjectProperties = self.create_reqObjProperties_Mock(tc)
+            cm.reqObjectStatus = self.create_reqObjStatus_Mock(tc)
+
+    def create_reqObjProperties_Mock(self, tc):
+        tc.jomnilinkII_mock.Message.MESG_TYPE_OBJ_PROP = 33
+        m1 = JomnilinkII_ZoneProperties_for_test(33, "Front Door", 1, 1, 1, 0)
+        m2 = JomnilinkII_ZoneProperties_for_test(33, "Motion", 2, 3, 1, 1)
+        m3 = JomnilinkII_ZoneProperties_for_test(33, "Smoke Det", 3, 32, 1, 3)
+        m4 = JomnilinkII_ZoneProperties_for_test(0, "", 0, 0, 0, 0)
+        reqfunc = Mock(side_effect=[m1, m2, m3, m4])
+        return reqfunc
+
+    def create_reqObjStatus_Mock(self, tc):
+        os_for_test = JomnilinkII_ObjectStatus_for_test(
+            tc.jomnilinkII_mock.Message.OBJ_TYPE_ZONE,
+            [JomnilinkII_ZoneStatus_for_test(0, 0, 100)])
+
+        return Mock(return_value=os_for_test)
+
+
+class CreateZoneDevicesFixture(Fixture):
+    """ Depends on MockObjPropAndStatusFixture, PluginStartedFixture,
+    ConnectionValuesFixture
+    """
+    def setUp(self, tc):
+        self.create_zone_devices(tc)
+
+    @staticmethod
+    def create_zone_devices(tc, values=None):
+        if values is None:
+            values = tc.values
+        values = tc.plugin.makeConnection(values, [])
+        values["deviceGroupList"] = ["omniZoneDevice"]
+        tc.plugin.createDevices(
+            values,
+            [dev.id for dev in indigo.devices.values()
+             if dev.pluginProps["ipAddress"] == values["ipAddress"]])
+        return values
+
+ReadyToCreateZoneDevicesFixture = CompositeFixture(MockObjPropAndStatusFixture,
+                                                   ConnectionValuesFixture)
+ZoneDevicesCreatedFixture = CompositeFixture(ReadyToCreateZoneDevicesFixture,
+                                             CreateZoneDevicesFixture)
+
+
+class GetDeviceListTestCase(TestCaseWithFixtures):
     def setUp(self):
-        PluginTestCase.setUp(self)
-        for i in range(len(self.connection_mocks)):
-            self.connection_mocks[i].reqObjectProperties = self.create_reqObjProperties_Mock()
-            self.connection_mocks[i].reqObjectStatus = self.create_reqObjStatus_Mock()
+        TestCaseWithFixtures.setUp(self)
+        self.useFixture(PluginStartedFixture)
+        self.useFixture(ReadyToCreateZoneDevicesFixture)
 
     def test_GetDeviceList_ReturnsZone(self):
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix":""}
-        values.update(self.dialog_flags)
-        values = self.plugin.makeConnection(values, [])
-        result = self.plugin.getDeviceGroupList(None, values, [])
+        self.plugin.makeConnection(self.values, [])
+        result = self.plugin.getDeviceGroupList(None, self.values, [])
         self.assertTrue(("omniZoneDevice", "Zone") in result)
 
     def test_GetDeviceList_ReturnsEmptyList_OnConnectionError(self):
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix":""}
-        values.update(self.dialog_flags)
-        values = self.plugin.makeConnection(values, [])
-        self.connection_mock.reqObjectProperties.side_effect = self.plugin_module.extensions.ConnectionError
-        result = self.plugin.getDeviceGroupList(None, values, [])
+        self.plugin.makeConnection(self.values, [])
+
+        cm = self.connection_mock
+        ConnectionError = self.plugin_module.extensions.ConnectionError
+        cm.reqObjectProperties.side_effect = ConnectionError
+
+        result = self.plugin.getDeviceGroupList(None, self.values, [])
+
         self.assertTrue(("omniZoneDevice", "Zone") not in result)
         self.assertTrue(self.plugin.errorLog.called)
         self.plugin.errorLog.reset_mock()
 
-    def test_CreateDevices_CreatesDeviceForEachZone(self):
-        values = self.create_zone_devices()
-        self.assertEqual(len(set([dev for dev in indigo.devices.values()
-                                  if dev.deviceTypeId == "omniZoneDevice"])), 3)
+    def test_Notification_Ignores_NonZoneNotifications(self):
+        status_msg = JomnilinkII_ObjectStatus_for_test(
+            Mock(),
+            [JomnilinkII_ZoneStatus_for_test(10, 1, 100)])
+        CreateZoneDevicesFixture.create_zone_devices(self)
+        for listener in self.notify_listeners[0]:
+            listener.objectStausNotification(status_msg)
 
-        self.plugin.createDevices(values, [dev.id for dev in indigo.devices.values()])
+
+class ZoneDeviceTestCase(TestCaseWithFixtures):
+    def setUp(self):
+        TestCaseWithFixtures.setUp(self)
+        self.useFixture(PluginStartedFixture)
+        self.useFixture(ZoneDevicesCreatedFixture)
+
+    def test_CreateDevices_CreatesDeviceForEachZone(self):
+        self.assertEqual(len(set([dev for dev in indigo.devices.values()
+                                  if dev.deviceTypeId == "omniZoneDevice"])),
+                         3)
+
+        self.plugin.createDevices(self.values,
+                                  [dev.id for dev in indigo.devices.values()])
 
         devices = set([dev for dev in indigo.devices.values()
                        if dev.deviceTypeId == "omniZoneDevice"])
         self.assertEqual(len(devices), 3)
 
-    def create_zone_devices(self, values=None):
-        if values is None:
-            values = {"ipAddress" : "192.168.1.42",
-                      "portNumber" : "4444",
-                      "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                      "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                      "prefix" : ""}
-        values.update(self.dialog_flags)
-        values = self.plugin.makeConnection(values, [])
-        values["deviceGroupList"] = ["omniZoneDevice"]
-        self.plugin.createDevices(values, [dev.id for dev in indigo.devices.values()
-                                           if dev.pluginProps["ipAddress"] == values["ipAddress"]])
-        return values
-
-    def create_reqObjProperties_Mock(self):
-        self.jomnilinkII_mock.Message.MESG_TYPE_OBJ_PROP = 0x21
-        m1 = JomnilinkII_ZoneProperties_for_test(0x21, "Front Door", 1, 1, 1, 0)
-        m2 = JomnilinkII_ZoneProperties_for_test(0x21, "Motion", 2, 3, 1, 1)
-        m3 = JomnilinkII_ZoneProperties_for_test(0x21, "Smoke Det", 3, 32, 1, 3)
-        m4 = JomnilinkII_ZoneProperties_for_test(0, "", 0, 0, 0, 0)
-        reqfunc = Mock(side_effect = [m1, m2, m3, m4])
-        return reqfunc
-
-    def create_reqObjStatus_Mock(self):
-        reqfunc = Mock(return_value = JomnilinkII_ObjectStatus_for_test(
-            self.jomnilinkII_mock.Message.OBJ_TYPE_ZONE,
-            [JomnilinkII_ZoneStatus_for_test(0, 0, 100)]))
-        return reqfunc
-
     def test_DeviceStartComm_Succeeds_OnValidInput(self):
-        self.create_zone_devices()
         dev = indigo.devices["Smoke Det"]
         self.plugin.deviceStartComm(dev)
         self.assertTrue(dev.error_state is None)
@@ -117,7 +146,6 @@ class ZoneDeviceTestCase(PluginTestCase):
         self.assertEqual(dev.states["hadTrouble"], False)
 
     def test_DeviceStartComm_SetsErrorState_OnConnectionError(self):
-        self.create_zone_devices()
         dev = indigo.devices["Smoke Det"]
         self.connection_mock.reqObjectStatus.side_effect = Py4JError
 
@@ -127,15 +155,13 @@ class ZoneDeviceTestCase(PluginTestCase):
         self.plugin.errorLog.reset_mock()
 
     def test_RemoveDevices_Removes_ZoneDevices(self):
-        values = self.create_zone_devices()
         dev_ids = set([dev.id for dev in indigo.devices.values()
                        if dev.deviceTypeId == "omniZoneDevice"])
-        self.plugin.removeDevices(values, list(dev_ids))
+        self.plugin.removeDevices(self.values, list(dev_ids))
         for dev in indigo.devices.values():
             self.assertNotEqual(dev.deviceTypeId, "omniZoneDevice")
 
     def test_Notification_Changes_DeviceState(self):
-        self.create_zone_devices()
         dev = indigo.devices["Front Door"]
         self.plugin.deviceStartComm(dev)
         self.assertTrue(dev.states["condition"] == "Secure")
@@ -151,26 +177,15 @@ class ZoneDeviceTestCase(PluginTestCase):
         self.assertTrue(dev.states["condition"] == "Not Ready")
         self.assertTrue(dev.error_state is None)
 
-    def test_Notification_Ignores_NonZoneNotifications(self):
-        status_msg = JomnilinkII_ObjectStatus_for_test(
-            Mock(),
-            [JomnilinkII_ZoneStatus_for_test(10, 1, 100)])
-        self.create_zone_devices()
-        for listener in self.notify_listeners[0]:
-            listener.objectStausNotification(status_msg)
-
     def test_DisconnectNotification_SetsErrorState_OfCorrectZoneDevice(self):
-        values = self.create_zone_devices()
-        devs_1 = set([dev for dev in indigo.devices.values()
-                      if dev.pluginProps["ipAddress"] == values["ipAddress"]])
-        values = {"ipAddress": "10.0.0.2",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF",
-                  "prefix" : ""}
-        self.create_zone_devices(values)
-        devs_2 = set([dev for dev in indigo.devices.values()
-                      if dev.pluginProps["ipAddress"] == values["ipAddress"]])
+        devs_1 = set(
+            [dev for dev in indigo.devices.values()
+             if dev.pluginProps["ipAddress"] == self.values["ipAddress"]])
+        CreateZoneDevicesFixture.create_zone_devices(self, self.values2)
+        devs_2 = set(
+            [dev for dev in indigo.devices.values()
+             if dev.pluginProps["ipAddress"] == self.values2["ipAddress"]])
+        self.assertTrue(len(devs_2), 3)
 
         for dev in devs_1.union(devs_2):
             self.plugin.deviceStartComm(dev)
@@ -182,9 +197,9 @@ class ZoneDeviceTestCase(PluginTestCase):
             self.assertTrue(dev.error_state is not None)
 
     def test_ReconnectNotification_Clears_DeviceErrorState(self):
-        values = self.create_zone_devices()
-        devs = set([dev for dev in indigo.devices.values()
-                      if dev.pluginProps["ipAddress"] == values["ipAddress"]])
+        devs = set(
+            [dev for dev in indigo.devices.values()
+             if dev.pluginProps["ipAddress"] == self.values["ipAddress"]])
         for dev in devs:
             self.plugin.deviceStartComm(dev)
 
@@ -193,11 +208,10 @@ class ZoneDeviceTestCase(PluginTestCase):
             listener.notConnectedEvent(Mock())
 
         self.assertTrue(dev.error_state is not None)
-        self.plugin.update() # this should get the second connection object
+        self.plugin.update()  # this should get the second connection object
         self.assertTrue(dev.error_state is None)
 
     def test_DeviceStopComm_Succeeds(self):
-        self.create_zone_devices()
         dev = indigo.devices["Motion"]
         self.plugin.deviceStartComm(dev)
         self.plugin.deviceStopComm(dev)
