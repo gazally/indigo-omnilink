@@ -343,3 +343,9 @@ JomnilinkII_SecurityCodeValidation_for_test = build_java_class_mimic(
 
 JomnilinkII_OtherEventNotifications_for_test = build_java_class_mimic(
     ["Notifications"])
+
+mimic = build_java_class_mimic(
+    ["MessageType", "EventNumber", "TimeDataValid", "Month", "Day", "Hour",
+     "Minute", "EventType", "Parameter1", "Parameter2"])
+mimic.isTimeDataValid = mimic.getTimeDataValid
+JomnilinkII_EventLogData_for_test = mimic

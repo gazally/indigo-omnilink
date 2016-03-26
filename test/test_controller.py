@@ -179,6 +179,7 @@ class ControllerTestCase(TestCaseWithFixtures):
         mock_statuses = Mock()
         mock_statuses.getStatuses.return_value = [Mock()]
         mock_properties = self.create_reqObjProperties_Mock()
+        mock_log = self.create_uploadEventLogData_Mock()
 
         for cm in self.connection_mocks:
             cm.reqObjectTypeCapacities.return_value = mock_capacities
@@ -186,6 +187,7 @@ class ControllerTestCase(TestCaseWithFixtures):
             cm.reqSystemFeatures.return_value = mock_features
             cm.reqObjectStatus.return_value = mock_statuses
             cm.reqObjectProperties = mock_properties
+            cm.uploadEventLogData = mock_log
 
         self.plugin.makeConnection(self.values, [])
         self.plugin.makeConnection(self.values2, [])
@@ -203,6 +205,28 @@ class ControllerTestCase(TestCaseWithFixtures):
             index = 0
 
         def looper(a, b, c, d, e, f):
+            retval = locals.objs[locals.index % len(locals.objs)]
+            locals.index += 1
+            return retval
+
+        return Mock(side_effect=looper)
+
+    def create_uploadEventLogData_Mock(self):
+        self.jomnilinkII_mock.Message.MESG_TYPE_EVENT_LOG_DATA = 99
+
+        class locals:
+            objs = [
+                JomnilinkII_EventLogData_for_test(
+                    99, 0, True, 3, 28, 10, 30, 135, 8, 0),
+                JomnilinkII_EventLogData_for_test(
+                    99, 0, True, 3, 28, 10, 30, 4, 254, 4),
+                JomnilinkII_EventLogData_for_test(
+                    99, 0, False, 3, 28, 10, 30, 138, 0, 1),
+                JomnilinkII_EventLogData_for_test(
+                    0, 0, False, 3, 28, 10, 30, 0, 0, 0)]
+            index = 0
+
+        def looper(a, b):
             retval = locals.objs[locals.index % len(locals.objs)]
             locals.index += 1
             return retval

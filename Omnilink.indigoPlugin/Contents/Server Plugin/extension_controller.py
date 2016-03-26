@@ -19,6 +19,7 @@
 """ Omni Plugin extension for Controller Devices """
 from __future__ import unicode_literals
 from collections import namedtuple, defaultdict
+import datetime
 from distutils.version import StrictVersion
 import logging
 
@@ -34,8 +35,7 @@ _VERSION = "0.2.0"
 
 # to do -- update the battery reading periodically (like once a day)
 # action - console beepers enable/disable/beep n times
-# action - set time in controller
-# action - read event log
+# action - set time in controller automatically
 # to do - UIDisplayStateId should be based on troubles not connection
 # action - acknowledge troubles
 
@@ -443,7 +443,6 @@ class ControllerExtension(extensions.PluginExtension):
         """ Callback for the "Write information on connected OMNI Controllers
         to Log" menu item.
         """
-        first = True
         for c in self.plugin.connections.values():
             if not c.is_connected():
                 msg = "OMNI Controller at {0} is not connected ".format(c.ip)
@@ -457,12 +456,8 @@ class ControllerExtension(extensions.PluginExtension):
                     msg = msg + ("because it did not respond, or because the "
                                  "IP address, port or encryption keys are "
                                  "not correct.")
-                self.log(msg)
+                self.log(msg, title=True)
             else:
-                if first:
-                    first = False
-                else:
-                    self.log("-" * 80)
                 try:
                     self.log_everything_we_know_about(c)
                 except (ConnectionError, Py4JError):
@@ -470,18 +465,24 @@ class ControllerExtension(extensions.PluginExtension):
                     log.debug("", exc_info=True)
 
     def log_everything_we_know_about(self, c):
-        self.log("Omni Controller at {0}:".format(c.ip))
+        self.log("Omni Controller at {0}:".format(c.ip), title=True)
         M = c.jomnilinkII.Message
         OP = c.jomnilinkII.MessageTypes.ObjectProperties
         omni = c.omni
 
+        self.log("System Information:", header=True)
         self.log(omni.reqSystemInformation().toString())
         self.log(omni.reqSystemStatus().toString())
         self.log(omni.reqSystemFormats().toString())
 
-        self.log("System Troubles:", *omni.reqSystemTroubles().getTroubles())
-        self.log("System Features:", *omni.reqSystemFeatures().getFeatures())
+        st = omni.reqSystemTroubles().getTroubles()
+        self.log("System Troubles:", header=True)
+        self.log(*st if st else ["None"])
+        sf = omni.reqSystemFeatures().getFeatures()
+        self.log("System Features:", header=True)
+        self.log(*sf if sf else ["None"])
 
+        self.log("System Capacities:", header=True)
         self.log(
             "Max zones:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_ZONE).getCapacity())
@@ -518,6 +519,7 @@ class ControllerExtension(extensions.PluginExtension):
             M.OBJ_TYPE_AUDIO_SOURCE).getCapacity()
         self.log("Max audio sources:", max_audio_sources)
 
+        self.log("System Objects:", header=True)
         self.query_and_print(omni, M.OBJ_TYPE_ZONE, M.MESG_TYPE_OBJ_PROP,
                              OP.FILTER_1_NAMED,
                              OP.FILTER_2_AREA_ALL,
@@ -573,17 +575,10 @@ class ControllerExtension(extensions.PluginExtension):
                 self.log(m.toString())
                 pos = m.getPosition()
 
-        num = 0
-        count = 0
-        while True:
-            m = omni.uploadEventLogData(num, 1)
-            if (m.getMessageType() != M.MESG_TYPE_EVENT_LOG_DATA or
-                    count > 10):
-                break
-            self.log(m.toString())
-            num = m.getEventNumber()
-            count += 1
+        self.log("Event Log:", header=True)
+        self.log_event_log_entries(omni, M, 255)
 
+        self.log("System Names:", header=True)
         self.log(omni.uploadNames(M.OBJ_TYPE_UNIT, 0).toString())
 
     def query_and_print(self, omni, objtype, mtype, filter1, filter2, filter3):
@@ -600,5 +595,104 @@ class ControllerExtension(extensions.PluginExtension):
             for s in statuses:
                 self.log(s.toString())
 
-    def log(self, *args):
-        indigo.server.log(" ".join([unicode(arg) for arg in args]))
+    def log_event_log_entries(self, omni, M, limit):
+        num = 0
+        count = 0
+        while True:
+            m = omni.uploadEventLogData(num, -1)
+            if (m.getMessageType() != M.MESG_TYPE_EVENT_LOG_DATA or
+                    count > limit):
+                break
+            self.log_event_log_entry(m)
+            num = m.getEventNumber()
+            count += 1
+
+    def log_event_log_entry(self, m):
+        time_format = "%b %d %X   "
+        if m.isTimeDataValid():
+            time = datetime.datetime(
+                # the 2016 is not printed (but it is a leap year)
+                2016, m.getMonth(), m.getDay(), m.getHour(),
+                m.getMinute()).strftime(time_format)
+        else:
+            width = len(datetime.datetime.now().strftime(time_format))
+            time = "{{0:<{0}}}".format(width).format("Unknown")
+
+        event, pn1, pn2 = self.events.get(m.getEventType(),
+                                          ("Unknown", "Unused", "Unused"))
+        pnames = [pn1, pn2]
+        pvals = [self.modify_parameter(pn1, m.getParameter1()),
+                 self.modify_parameter(pn2, m.getParameter2())]
+        tups = [(pn, p) for pn, p in zip(pnames, pvals)
+                if pn != "Unused"]
+
+        width = max([len(e) for e, _, _ in self.events.values()])
+        event = "{{0:<{0}}} ".format(width).format(event)
+
+        params = ["{0}: {1}".format(pn, p) for pn, p in tups]
+        params = "".join(["{0:<20}".format(p) for p in params])
+        self.log(time + event + params)
+
+    events = {
+        4: ("Bypass", "User", "Zone"),
+        5: ("Restore", "User", "Zone"),
+        6: ("All Zones Restored", "User", "Area"),
+
+        48 + 0: ("Disarm", "User", "Unused"),
+        48 + 1: ("Arm Home", "User", "Unused"),
+        48 + 2: ("Arm Sleep", "User", "Unused"),
+        48 + 3: ("Arm Away", "User", "Unused"),
+        48 + 4: ("Arm Vacation", "User", "Unused"),
+        48 + 5: ("Arm Party", "User", "Unused"),
+        48 + 6: ("Arm Special", "User", "Unused"),
+
+        128: ("Zone Tripped", "Unused", "Zone"),
+        129: ("Zone Trouble", "Unused", "Zone"),
+        130: ("Remote Phone Access", "User", "Unused"),
+        131: ("Remote Phone Lockout", "Unused", "Unused"),
+        133: ("Trouble Cleared", "Unused", "Zone"),
+        134: ("PC Access", "User", "Unused"),
+        135: ("Alarm Activated", "Type", "Area"),
+        136: ("Alarm Reset", "Type", "Area"),
+
+        137: ("System Reset", "Unused", "Unused"),
+        138: ("Message Logged", "Unused", "Message Number"),
+        139: ("Zone Shut Down", "Unused", "Zone"),
+        140: ("Access Granted", "User Number", "Reader"),
+        141: ("Access Denied", "User Number", "Reader"),
+        }
+
+    special_user_codes = {
+        251: "Duress code",
+        252: "Keyswitch",
+        253: "Quick arm",
+        254: "PC Access",
+        255: "Programmed",
+        }
+
+    alarm_types = {
+        1: "Burglary",
+        2: "Fire",
+        3: "Gas",
+        4: "Auxiliary",
+        5: "Freeze",
+        6: "Water",
+        7: "Duress",
+        8: "Temperature",
+        }
+
+    def modify_parameter(self, pname, p):
+        if pname == "User":
+            return self.special_user_codes.get(p, p)
+        elif pname == "Area":
+            return "All" if p == 0 else p
+        elif pname == "Type":
+            return self.alarm_types.get(p, "Unknown")
+        return p
+
+    def log(self, *args, **kwargs):
+        header = kwargs.pop("header", False)
+        title = kwargs.pop("title", False)
+        indent = 0 if title else 4 if header else 8
+        indigo.server.log(" " * indent +
+                          " ".join([unicode(arg) for arg in args]))
