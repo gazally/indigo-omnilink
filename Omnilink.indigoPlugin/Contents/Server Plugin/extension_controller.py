@@ -18,7 +18,7 @@
 
 """ Omni Plugin extension for Controller Devices """
 from __future__ import unicode_literals
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from distutils.version import StrictVersion
 import logging
 
@@ -36,10 +36,8 @@ _VERSION = "0.2.0"
 # action - console beepers enable/disable/beep n times
 # action - set time in controller
 # action - read event log
-# action - query all capabilities and dump to log
 # to do - UIDisplayStateId should be based on troubles not connection
 # action - acknowledge troubles
-# to do - event notifications
 
 
 class ControllerExtension(extensions.PluginExtension):
@@ -47,8 +45,20 @@ class ControllerExtension(extensions.PluginExtension):
     def __init__(self):
         self.type_ids = {"device": ["omniControllerDevice"],
                          "action": ["checkSecurityCode"],
-                         "event": []}
+                         "event": ["phoneLineDead", "phoneLineRing",
+                                   "phoneLineOffHook", "phoneLineOnHook",
+                                   "ACPowerOff", "ACPowerOn",
+                                   "batteryLow", "batteryOK",
+                                   "digitalCommunicatorModuleTrouble",
+                                   "digitalCommunicatorModuleOK",
+                                   "energyCostLow", "energyCostMid",
+                                   "energyCostHigh", "energyCostCritical"]}
         self.devices = []
+
+        # for each device contains a dict
+        # which maps event type -> list of triggers
+        self.triggers = {}
+
         self.callbacks = {
             "writeControllerInfoToLog": self.writeControllerInfoToLog,
             "checkSecurityCode": self.checkSecurityCode
@@ -63,8 +73,17 @@ class ControllerExtension(extensions.PluginExtension):
         log.debug("Starting device {0}".format(device.id))
         if device not in self.devices:
             self.devices.append(device)
+            self.triggers[device.id] = defaultdict(list)
             self.update_device_version(device)
             self.update_device_status(device)
+
+    def deviceStopComm(self, device):
+        if device in self.devices:
+            log.debug("Stopping device {0}".format(device.id))
+            self.devices.remove(device)
+            del self.triggers[device.id]
+
+    # ----- Maintenance of device states ----- #
 
     def update_device_version(self, device):
         """ if the device was defined in a previous version of this plugin,
@@ -110,6 +129,8 @@ class ControllerExtension(extensions.PluginExtension):
             log.debug("", exc_info=True)
             device.updateStateOnServer("connected", False)
             device.setErrorStateOnServer("not connected")
+
+        device.refreshFromServer()
 
     authority = {0: "Invalid",
                  1: "Master",
@@ -178,10 +199,6 @@ class ControllerExtension(extensions.PluginExtension):
             "Info", ["model", "firmware", "battery_reading", "troubles"])(
                 model, firmware, battery_reading, trouble_states)
 
-    def deviceStopComm(self, device):
-        if device in self.devices:
-            self.devices.remove(device)
-
     # ----- Device creation ----- #
 
     def getDeviceList(self, props, dev_ids):
@@ -215,25 +232,117 @@ class ControllerExtension(extensions.PluginExtension):
 
     # ----- Callbacks from OMNI Status and events ----- #
 
+    notification_mask = 0xFF00
+    event_mask = 0x00FF
+    notification_value = 0x0300
+    event_types = {0: "phoneLineDead",
+                   1: "phoneLineRing",
+                   2: "phoneLineOffHook",
+                   3: "phoneLineOnHook",
+
+                   4: "ACPowerOff",
+                   5: "ACPowerRestored",
+
+                   6: "batteryLow",
+                   7: "batteryOK",
+
+                   8: "digitalCommunicatorModuleTrouble",
+                   9: "digitalCommunicatorModuleOK",
+
+                   10: "energyCostLow",
+                   11: "energyCostMid",
+                   12: "energyCostHigh",
+                   13: "energyCostCritical"}
+
     def event_notification(self, connection, other_event_msg):
-        connection_props = self.plugin.props_from_connection(connection)
+        """ Callback used by plugin when it receives an Other Event
+        Notification from the Omni controller. Decode the events
+        that are pertinent to the controller functionality, and set
+        off any active triggers.
+        """
+        try:
+            dev = self.find_device_from_connection(connection)
+            triggers = self.triggers[dev.id]
+        except KeyError:
+            return
+        log.debug('Received "other event" notification for device {0}'.format(
+            dev.id))
+        try:
+            notifications = other_event_msg.getNotifications()
+            for n in notifications:
+                if n & self.notification_mask == self.notification_value:
+                    event_num = n & self.event_mask
+                    if event_num in self.event_types:
+                        event_type = self.event_types[event_num]
+                        log.debug("Received {0} event for device {1}".format(
+                            event_type, dev.id))
+                        for t in self.triggers[dev.id][event_type]:
+                            indigo.trigger.execute(t)
+        except Py4JError:
+            log.error("Unable to decode event notification", exc_info=True)
+
+        self.update_device_status(dev)
 
     def reconnect_notification(self, connection):
-        connection_key = self.plugin.make_connection_key(
-            self.plugin.props_from_connection(connection))
-        for dev in self.devices:
-            if (self.plugin.make_connection_key(dev.pluginProps) ==
-                    connection_key):
-                self.update_device_status(dev)
+        """ Callback used by plugin when successful reconnection
+        is made to the Omni controller. Refresh device states.
+        """
+        try:
+            dev = self.find_device_from_connection(connection)
+            self.update_device_status(dev)
+        except KeyError:
+            return
 
     def disconnect_notification(self, connection, e):
+        """ Callback used by plugin when a disconnect message is
+        received from the jomnilinkII library. Put all devices into
+        the error state. """
+        try:
+            dev = self.find_device_from_connection(connection)
+            dev.updateStateOnServer("connected", False)
+            dev.setErrorStateOnServer("not connected")
+        except KeyError:
+            return
+
+    def find_device_from_connection(self, connection):
+        """ Given a connection, try to find a device with
+        matching ip, port and encryption keys. If not found, raise
+        a KeyError.
+        """
         connection_key = self.plugin.make_connection_key(
             self.plugin.props_from_connection(connection))
         for dev in self.devices:
             if (self.plugin.make_connection_key(dev.pluginProps) ==
                     connection_key):
-                dev.updateStateOnServer("connected", False)
-                dev.setErrorStateOnServer("not connected")
+                return dev
+        raise KeyError
+
+    # ----- Trigger Start and Stop Methods ----- #
+
+    def triggerStartProcessing(self, trigger):
+        log.debug(
+            "Start processing {0} trigger {1}".format(trigger.pluginTypeId,
+                                                      str(trigger.id)))
+        try:
+            dev_id = int(trigger.pluginProps["controllerId"])
+            triggers = self.triggers[dev_id][trigger.pluginTypeId]
+            if trigger.id not in triggers:
+                triggers.append(trigger.id)
+        except KeyError:
+            log.error("Trigger {0} is configured incorrectly".format(
+                trigger.id))
+            log.debug("", exc_info=True)
+
+    def triggerStopProcessing(self, trigger):
+        log.debug(
+            "Stop processing {0} trigger {1}".format(trigger.pluginTypeId,
+                                                     trigger.id))
+        try:
+            dev_id = int(trigger.pluginProps["controllerId"])
+            triggers = self.triggers[dev_id][trigger.pluginTypeId]
+            triggers.remove(trigger.id)
+        except KeyError, ValueError:
+            log.debug("Couldn't stop trigger because it wasn't started")
 
     # ----- Action Item Config UI ----- #
 

@@ -112,6 +112,7 @@ def delete_device(device):
 
 
 def reset():
+    mock_indigo.reset_mock()
     mock_indigo.devices = IndigoDictForTest()
     PluginBaseForTest.debugLog.reset_mock()
     PluginBaseForTest.errorLog.reset_mock()

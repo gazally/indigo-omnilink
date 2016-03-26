@@ -79,6 +79,30 @@ ControllerDeviceStartedFixture = CompositeFixture(PluginStartedFixture,
                                                   ControllerDeviceStartFixture)
 
 
+class TriggerStartFixture(Fixture):
+    """ Dependencies: ControllerDeviceStartedFixture
+    Make a trigger and ask the plugin to start processing it. Also
+    mock two "other event" messages, one that matches the trigger and
+    one that doesn't.
+    """
+    def setUp(self, tc):
+        tc.trigger = Mock()
+        tc.trigger.id = 1
+        tc.trigger.pluginTypeId = "batteryOK"
+        tc.trigger.pluginProps = {"controllerId": unicode(tc.dev.id)}
+        tc.plugin.triggerStartProcessing(tc.trigger)
+
+        # a message matching the trigger
+        tc.event_msg = JomnilinkII_OtherEventNotifications_for_test(
+            [0x0307])
+        # and one that doesn't
+        tc.mismatch_msg = JomnilinkII_OtherEventNotifications_for_test(
+            [0x0303, 0x0406])
+
+TriggerStartedFixture = CompositeFixture(ControllerDeviceStartedFixture,
+                                         TriggerStartFixture)
+
+
 class ControllerTestCase(TestCaseWithFixtures):
     """ Test cases that require a started plugin, but no controller devices """
     def setUp(self):
@@ -344,6 +368,59 @@ class ControllerDeviceStartedTestCase(TestCaseWithFixtures):
         self.assertEqual(self.dev.states["lastCheckedCodeAuthority"], "Error")
         self.assertEqual(self.dev.states["lastCheckedCodeUser"], "N/A")
         self.assertFalse(self.dev.states["lastCheckedCodeDuress"])
+
+    def test_TriggerStartProcessing_Handles_UnconfiguredTrigger(self):
+        trigger = Mock()
+        trigger.id = 1
+        trigger.pluginTypeId = "batteryLow"
+        trigger.pluginProps = {}
+        self.plugin.triggerStartProcessing(trigger)
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
+
+    def test_TriggerProcessing_Succeeds_WithValidTrigger(self):
+        trigger = Mock()
+        trigger.id = 1
+        trigger.pluginTypeId = "batteryLow"
+        trigger.pluginProps = {"controllerId": unicode(self.dev.id)}
+        self.plugin.triggerStartProcessing(trigger)
+        self.plugin.triggerStopProcessing(trigger)
+
+
+class TriggerTestCase(TestCaseWithFixtures):
+    def setUp(self):
+        TestCaseWithFixtures.setUp(self)
+        self.useFixture(TriggerStartedFixture)
+
+    def test_OtherEventNotification_Executes_Trigger(self):
+        for listener in self.notify_listeners[0]:
+            listener.otherEventNotification(self.event_msg)
+
+        self.assertTrue(self.plugin_module.indigo.trigger.execute.called)
+
+    def test_OtherEventNotification_UpdatesDeviceState(self):
+        self.connection_mock.reqSystemTroubles = Mock(
+            return_value=JomnilinkII_SystemTroubles_for_test([]))
+
+        for listener in self.notify_listeners[0]:
+            listener.otherEventNotification(self.event_msg)
+
+        self.assertFalse(self.dev.states["batteryLowTrouble"])
+
+    def test_OtherEventNotification_Ignores_UnknownMessage(self):
+        for listener in self.notify_listeners[0]:
+            listener.otherEventNotification(self.mismatch_msg)
+
+        self.assertFalse(self.plugin_module.indigo.trigger.execute.called)
+
+    def test_OtherEventNotification_Ignores_MessageForStoppedDevice(self):
+        self.plugin.deviceStopComm(self.dev)
+
+        for listener in self.notify_listeners[0]:
+            listener.otherEventNotification(self.event_msg)
+
+        self.assertFalse(self.plugin_module.indigo.trigger.execute.called)
+
 
 if __name__ == "__main__":
     unittest.main()

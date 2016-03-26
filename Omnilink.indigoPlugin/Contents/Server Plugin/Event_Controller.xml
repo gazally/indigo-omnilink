@@ -1,0 +1,140 @@
+<Event id="phoneLineDead">
+  <Name>Phone Line Dead</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="phoneLineRing">
+  <Name>Phone Line Ring</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="phoneLineOffHook">
+  <Name>Phone Line Off Hook</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="phoneLineOnHook">
+  <Name>Phone Line On Hook</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+
+<Event id="sep1"/>
+
+<Event id="ACPowerOff">
+  <Name>AC Power Off</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="ACPowerOn">
+  <Name>AC Power On</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+
+<Event id="sep2"/>
+
+<Event id="batteryLow">
+  <Name>Battery Low</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="batteryOK">
+  <Name>Battery OK</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+
+<Event id="sep3"/>
+
+<Event id="digitalCommunicatorModuleTrouble">
+  <Name>Digital Communicator Module Trouble</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="digitalCommunicatorModuleOK">
+  <Name>Digital Communicator Module OK</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+
+<Event id="sep4"/>
+
+<Event id="energyCostLow">
+  <Name>Energy Cost Low</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="energyCostMid">
+  <Name>Energy Cost Mid</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="energyCostHigh">
+  <Name>Energy Cost High</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+<Event id="energyCostCritical">
+  <Name>Energy Cost Critical</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+    </Field>
+  </ConfigUI>
+</Event>
+
+

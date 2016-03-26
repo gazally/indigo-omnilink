@@ -340,3 +340,6 @@ JomnilinkII_SystemStatus_for_test = build_java_class_mimic(
 
 JomnilinkII_SecurityCodeValidation_for_test = build_java_class_mimic(
     ["CodeNumber", "AuthorityLevel"])
+
+JomnilinkII_OtherEventNotifications_for_test = build_java_class_mimic(
+    ["Notifications"])
