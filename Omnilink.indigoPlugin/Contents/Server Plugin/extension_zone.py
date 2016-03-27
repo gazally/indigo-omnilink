@@ -72,12 +72,12 @@ class ZoneExtension(extensions.PluginExtension):
             log.debug("", exc_info=True)
         return result
 
-    def createDevices(self, values, prefix, dev_ids):
+    def createDevices(self, dev_type, values, prefix, dev_ids):
         """ Automatically create a device for each zone, unless it already
         exists. """
         old_devs = [
             indigo.devices[id] for id in dev_ids
-            if indigo.devices[id].deviceTypeId == "omniZoneDevice"]
+            if indigo.devices[id].deviceTypeId == dev_type]
         values["deviceVersion"] = _VERSION
         try:
             for zp in self.zone_info(values).zone_props.values():
@@ -107,10 +107,13 @@ class ZoneExtension(extensions.PluginExtension):
     # ----- Callbacks from OMNI Status and events ----- #
 
     def status_notification(self, connection, status_msg):
-        connection_props = self.plugin.props_from_connection(connection)
-        zone_info = self.zone_info(connection_props)
-        number = None
         try:
+            if (status_msg.getStatusType() !=
+                    connection.jomnilinkII.Message.OBJ_TYPE_ZONE):
+                return
+            connection_props = self.plugin.props_from_connection(connection)
+            zone_info = self.zone_info(connection_props)
+            number = None
             number, status = zone_info.number_and_status_from_notification(
                 status_msg)
         except Py4JError, ConnectionError:

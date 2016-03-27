@@ -205,18 +205,18 @@ class ControllerExtension(extensions.PluginExtension):
         """ Return list of devices this extension can create """
         return [("omniControllerDevice", "Controller")]
 
-    def createDevices(self, props, prefix, dev_ids):
+    def createDevices(self, dev_type, props, prefix, dev_ids):
         """ Automatically create a controller device, unless there is one
         already.
         """
         for dev_id in dev_ids:
-            if indigo.devices[dev_id].deviceTypeId == "omniControllerDevice":
+            if indigo.devices[dev_id].deviceTypeId == dev_type:
                 return
         log.debug("Creating controller device")
 
         props["deviceVersion"] = _VERSION
         kwargs = {"props": props,
-                  "deviceTypeId": "omniControllerDevice"}
+                  "deviceTypeId": dev_type}
         name = self.get_unique_name(prefix, "Controller")
         if name:
             kwargs["name"] = name

@@ -138,11 +138,12 @@ class PluginExtension(object):
         """
         return []
 
-    def createDevices(self, props, prefix, dev_ids):
+    def createDevices(self, dev_type, props, prefix, dev_ids):
         """ this is called by the device factory UI code to create devices
-        of the type managed by this extension. Implementations should catch
+        of a type managed by this extension. Implementations should catch
         all exceptions.
         arguments:
+            dev_type -- name of device type
             props -- dictionary containing current settings of device factory
                      dialog
             dev_ids -- list of existing device_ids in the device factory group

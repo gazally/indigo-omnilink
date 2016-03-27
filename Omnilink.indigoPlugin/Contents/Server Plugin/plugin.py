@@ -450,7 +450,7 @@ class Plugin(indigo.PluginBase):
             props = {}
             for key in self.dialog_keys:
                 props[key] = values[key]
-            ext.createDevices(props, values["prefix"], dev_ids)
+            ext.createDevices(dev_type, props, values["prefix"], dev_ids)
         return values
 
     def removeDevices(self, values, dev_ids):
