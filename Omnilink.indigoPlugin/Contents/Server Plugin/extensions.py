@@ -19,13 +19,6 @@
 import indigo
 
 
-class ConnectionError(RuntimeError):
-    """ Error raised within the plugin and extensions when the connection
-    to the Omni system is down.
-    """
-    pass
-
-
 class PluginExtensionRegistrar(type):
     """ Metaclass of PluginExtension which keeps track of newly imported
     PluginExtension child classes in a list.

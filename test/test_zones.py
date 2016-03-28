@@ -93,7 +93,7 @@ class GetDeviceListTestCase(TestCaseWithFixtures):
         self.plugin.makeConnection(self.values, [])
 
         cm = self.connection_mock
-        ConnectionError = self.plugin_module.extensions.ConnectionError
+        ConnectionError = self.plugin_module.ConnectionError
         cm.reqObjectProperties.side_effect = ConnectionError
 
         result = self.plugin.getDeviceGroupList(None, self.values, [])

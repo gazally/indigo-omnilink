@@ -34,7 +34,8 @@ class PluginStartQuitTestCase(TestCaseWithFixtures):
         self.useFixture(PluginEnvironmentFixture)
 
     def test_Creation_Handles_FailureToStartJava(self):
-        with patch("plugin.subprocess.Popen", Mock(side_effect=OSError)):
+        with patch("connection.subprocess.Popen",
+                   Mock(side_effect=OSError)):
             self.useFixture(NewPluginFixture)
             self.assertTrue(self.plugin.errorLog.called)
             self.plugin.errorLog.reset_mock()
@@ -81,6 +82,11 @@ class PluginCoreFunctionalityTestCase(TestCaseWithFixtures):
         self.assertEqual(self.plugin.debugLog.call_count, 2)
         self.assertFalse(self.plugin.debug_omni)
         self.assertFalse(self.plugin.errorLog.called)
+
+    def test_StartInteractiveInterpreterMenuItem_Succeeds(self):
+        with patch("plugin.start_shell_thread") as p:
+            self.plugin.startInteractiveInterpreter()
+            self.assertTrue(p.called)
 
     def test_PreferencesUIValidation_Succeeds_OnValidInput(self):
         values = {"showDebugInfo": True,

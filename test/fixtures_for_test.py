@@ -135,7 +135,7 @@ class POpenPatchFixture(Fixture):
         tc.javaproc_mock = mock.create_autospec(subprocess.Popen)
         tc.javaproc_mock.stdout = StringIO.StringIO("stdout\n")
         tc.javaproc_mock.stderr = StringIO.StringIO("")
-        self.popen_patcher = patch("plugin.subprocess.Popen",
+        self.popen_patcher = patch("connection.subprocess.Popen",
                                    Mock(return_value=tc.javaproc_mock))
         self.popen_patcher.start()
 
@@ -198,6 +198,7 @@ class IndigoModuleFixture(Fixture):
         # indigo starts the plugin with current directory set to Server Plugin
         # so do the same here
         tc.plugin_module = plugin
+
         os.chdir(plugin_path)
         self.tc = tc
 
@@ -225,7 +226,7 @@ class NewPluginFixture(Fixture):
         # patch time.sleep to short circuit the plugin's wait for
         # its java subprocess to start
         sleep = time.sleep
-        with patch('plugin.time.sleep') as ts:
+        with patch('connection.time.sleep') as ts:
             ts.side_effect = lambda t: sleep(t/100)
             tc.plugin.startup()
 

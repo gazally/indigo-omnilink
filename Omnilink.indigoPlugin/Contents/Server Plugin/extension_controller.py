@@ -26,8 +26,8 @@ import logging
 import indigo
 from py4j.protocol import Py4JError
 
+from connection import ConnectionError
 import extensions
-from extensions import ConnectionError
 
 log = logging.getLogger(__name__)
 

@@ -135,7 +135,7 @@ class ControllerTestCase(TestCaseWithFixtures):
 
     def test_DeviceStartComm_Fails_OnNetworkError(self):
         self.connection_mock.reqSystemInformation = Mock(
-            side_effect=self.plugin_module.extensions.ConnectionError)
+            side_effect=self.plugin_module.ConnectionError)
         dev = ControllerDeviceFixture.create_controller_device(self)
 
         self.plugin.deviceStartComm(dev)
@@ -235,7 +235,7 @@ class ControllerTestCase(TestCaseWithFixtures):
 
     def test_WriteControllerInfoToLog_Handles_NetworkError(self):
         self.connection_mock.reqSystemInformation = Mock(
-            side_effect=self.plugin_module.extensions.ConnectionError)
+            side_effect=self.plugin_module.connection.ConnectionError)
         self.plugin.makeConnection(self.values, [])
         self.assertFalse(self.plugin.errorLog.called)
 
