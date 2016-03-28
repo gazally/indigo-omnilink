@@ -39,14 +39,14 @@ _VERSION = "0.1.0"
 plugin_path = os.path.abspath(
     '../Omnilink.indigoPlugin/Contents/Server Plugin')
 
-# There are two modules used in the plugin, indigo and
-# py4j, which should not be in the test environment because they have too
-# many real world side effects, so do some mocking first.
+# Mock away any modules that should not be in the test environment
+# because they have too many real world side effects
 
 if plugin_path not in sys.path:
     sys.path.append(plugin_path)
 
 if 'plugin' not in sys.modules:
+    sys.modules['appscript'] = MagicMock()
     sys.modules['indigo'] = indigo_mock.mock_indigo
     sys.modules['py4j'] = MagicMock()
     sys.modules['py4j.java_gateway'] = sys.modules['py4j'].java_gateway
