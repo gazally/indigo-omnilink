@@ -1,4 +1,4 @@
-all: MenuItems.xml Actions.xml Devices.xml
+all: MenuItems.xml Actions.xml Devices.xml Events.xml
 
 ifneq ($(wildcard Device_*.xml),)
 Devices.xml: Device_*.xml
@@ -24,4 +24,11 @@ MenuItems.xml: MenuItem_*.xml
 	echo '</MenuItems>' >> MenuItems.xml
 endif
 
+ifneq ($(wildcard Event_*.xml),)
+Events.xml: Event_*.xml
+	echo '<?xml version="1.0"?>' > Events.xml
+	echo '<Events>' >> Events.xml
+	cat Event_*.xml >> Events.xml
+	echo '</Events>' >> Events.xml
+endif
 

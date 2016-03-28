@@ -12,4 +12,8 @@
   <Name>Toggle Debugging of OMNI Network Communication</Name>
   <CallbackMethod>toggleJomnilinkIIDebugging</CallbackMethod>
 </MenuItem>
+<MenuItem id="startInteractiveInterpreter">
+  <Name>Start Python Shell in Plugin Context</Name>
+  <CallbackMethod>startInteractiveInterpreter</CallbackMethod>
+</MenuItem>
 </MenuItems>

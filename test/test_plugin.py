@@ -24,23 +24,37 @@ from mock import Mock, MagicMock, patch
 
 from fixtures_for_test import *
 
-class PluginStartQuitTestCase(PluginStartupShutdownTestCase):
+
+class PluginStartQuitTestCase(TestCaseWithFixtures):
+    """ Tests that need everything ready to create the plugin but no
+    plugin created yet.
+    """
+    def setUp(self):
+        TestCaseWithFixtures.setUp(self)
+        self.useFixture(PluginEnvironmentFixture)
 
     def test_Creation_Handles_FailureToStartJava(self):
-        with patch("plugin.subprocess.Popen", Mock(side_effect=OSError)):
-            self.plugin = self.new_plugin()
+        with patch("connection.subprocess.Popen",
+                   Mock(side_effect=OSError)):
+            self.useFixture(NewPluginFixture)
             self.assertTrue(self.plugin.errorLog.called)
             self.plugin.errorLog.reset_mock()
             self.plugin.shutdown()
 
     def test_Shutdown_Handles_Exceptions(self):
-        self.plugin = self.new_plugin()
+        self.useFixture(NewPluginFixture)
         self.gateway_mock.shutdown.side_effect = Py4JError
         self.plugin.shutdown()
         self.assertTrue(self.plugin.errorLog.called)
         self.plugin.errorLog.reset_mock()
 
-class PluginCoreFunctionalityTestCase(PluginTestCase):
+
+class PluginCoreFunctionalityTestCase(TestCaseWithFixtures):
+    """ Test cases that require a started plugin """
+    def setUp(self):
+        TestCaseWithFixtures.setUp(self)
+        self.useFixture(PluginStartedFixture)
+        self.useFixture(ConnectionValuesFixture)
 
     def test_DebugMenuItem_Toggles(self):
         self.plugin.debug = False
@@ -55,7 +69,7 @@ class PluginCoreFunctionalityTestCase(PluginTestCase):
         self.assertFalse(self.plugin.errorLog.called)
 
     def test_RunConcurrentThread_Stops(self):
-        self.run_concurrent_thread(5)
+        NewPluginFixture.run_concurrent_thread(self, self.plugin, 5)
 
     def test_JomnilinkIIDebugMenuItem_Toggles(self):
         self.plugin.debug_omni = False
@@ -69,9 +83,14 @@ class PluginCoreFunctionalityTestCase(PluginTestCase):
         self.assertFalse(self.plugin.debug_omni)
         self.assertFalse(self.plugin.errorLog.called)
 
+    def test_StartInteractiveInterpreterMenuItem_Succeeds(self):
+        with patch("plugin.start_shell_thread") as p:
+            self.plugin.startInteractiveInterpreter()
+            self.assertTrue(p.called)
+
     def test_PreferencesUIValidation_Succeeds_OnValidInput(self):
-        values = {"showDebugInfo" : True,
-                  "showJomnilinkIIDebugInfo" : True}
+        values = {"showDebugInfo": True,
+                  "showJomnilinkIIDebugInfo": True}
         ok, d, e = self.plugin.validatePrefsConfigUi(values)
         self.assertTrue(ok)
         values["showDebugInfo"] = False
@@ -79,32 +98,17 @@ class PluginCoreFunctionalityTestCase(PluginTestCase):
         self.assertTrue(ok)
         self.assertFalse(self.plugin.errorLog.called)
 
-    # this should match the inital state in Device_Factory.xml
-    dialog_flags = {"isConnected": False,
-                   "error" : False,
-                   "connectionError" : False,
-                   "ipAddressError" : False,
-                   "portNumberError" : False,
-                   "encryptionKey1Error" : False,
-                   "encryptionKey2Error" : False}
-                   
-
     def test_DeviceFactoryUIValidation_Succeeds_OnValidInput(self):
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF"}
-        values.update(self.dialog_flags)
-        ok, d, e = self.plugin.validateDeviceFactoryUi(values, [])
+        ok, d, e = self.plugin.validateDeviceFactoryUi(self.values, [])
         self.assertTrue(ok)
         self.assertFalse(self.plugin.errorLog.called)
 
     def test_DeviceFactoryUIValidation_Fails_OnInvalidInput(self):
-        values = {"ipAddress" : "not an ip address",
-                  "portNumber" : "not a port",
-                  "encryptionKey1" : "not an encryption key",
-                  "encryptionKey2" : "still not an encryption key"}
-        values.update(self.dialog_flags)
+        values = {"ipAddress": "not an ip address",
+                  "portNumber": "not a port",
+                  "encryptionKey1": "not an encryption key",
+                  "encryptionKey2": "still not an encryption key"}
+        values.update(ConnectionValuesFixture.device_factory_dialog_flags)
 
         keys = ["ipAddress", "portNumber", "encryptionKey1", "encryptionKey2"]
         ok, d, e = self.plugin.validateDeviceFactoryUi(values, [])
@@ -113,19 +117,14 @@ class PluginCoreFunctionalityTestCase(PluginTestCase):
             self.assertTrue(k in e)
 
     def test_makeConnection_ClearsErrorState_OnValidInput(self):
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF"}
-        errors = {"ipAddressError" : True,
+        errors = {"ipAddressError": True,
                   "portError": True,
-                  "encryptionKey1Error" : True,
-                  "encryptionKey2Error" : True,
-                  "error" : True}
-        values.update(self.dialog_flags)
-        values.update(errors)
-        
-        values = self.plugin.makeConnection(values, [])
+                  "encryptionKey1Error": True,
+                  "encryptionKey2Error": True,
+                  "error": True}
+        self.values.update(errors)
+
+        values = self.plugin.makeConnection(self.values, [])
         self.assertFalse(values["error"])
         keys = ["ipAddress", "portNumber", "encryptionKey1", "encryptionKey2"]
         for k in keys:
@@ -134,11 +133,11 @@ class PluginCoreFunctionalityTestCase(PluginTestCase):
         self.assertTrue(values["isConnected"])
 
     def test_makeConnection_SetsErrorState_OnInvalidInput(self):
-        values = {"ipAddress" : "not an ip address",
-                  "portNumber" : "not a port",
-                  "encryptionKey1" : "not an encryption key",
-                  "encryptionKey2" : "still not an encryption key"}
-        values.update(self.dialog_flags)
+        values = {"ipAddress": "not an ip address",
+                  "portNumber": "not a port",
+                  "encryptionKey1": "not an encryption key",
+                  "encryptionKey2": "still not an encryption key"}
+        values.update(ConnectionValuesFixture.device_factory_dialog_flags)
 
         values = self.plugin.makeConnection(values, [])
         self.assertTrue(values["error"])
@@ -149,15 +148,9 @@ class PluginCoreFunctionalityTestCase(PluginTestCase):
         self.assertFalse(values["isConnected"])
 
     def test_makeConnection_SetsErrorState_OnFailureToConnect(self):
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF"}
-        values.update(self.dialog_flags)
-
         self.jomnilinkII_mock.Connection.side_effect = TestException
-        values = self.plugin.makeConnection(values, [])
-            
+        values = self.plugin.makeConnection(self.values, [])
+
         self.assertTrue(values["error"])
         keys = ["ipAddress", "portNumber", "encryptionKey1", "encryptionKey2"]
         for k in keys:
@@ -170,15 +163,13 @@ class PluginCoreFunctionalityTestCase(PluginTestCase):
     def test_GetDeviceFactoryUIValues_Handles_EmptyDeviceList(self):
         values, errors = self.plugin.getDeviceFactoryUiValues([])
         self.assertEqual(len(errors), 0)
-        self.assertTrue("isConnected" not in values or not values["isConnected"])
+        self.assertTrue("isConnected" not in values or
+                        not values["isConnected"])
 
     def test_GetDeviceFactoryUIValues_MakesConnection_GivenDevice(self):
-        values = {"ipAddress" : "192.168.1.42",
-                  "portNumber" : "4444",
-                  "encryptionKey1" : "01-23-45-67-89-AB-CD-EF",
-                  "encryptionKey2" : "01-23-45-67-89-AB-CD-EF"}
-        dev = self.plugin_module.indigo.device.create(Mock(), "none", values)
-        
+        dev = self.plugin_module.indigo.device.create(Mock(), "none",
+                                                      self.values)
+
         values, errors = self.plugin.getDeviceFactoryUiValues([dev.id])
         self.assertEqual(len(errors), 0)
         self.assertTrue(values["isConnected"])

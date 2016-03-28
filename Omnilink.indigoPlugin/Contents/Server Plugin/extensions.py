@@ -19,13 +19,6 @@
 import indigo
 
 
-class ConnectionError(RuntimeError):
-    """ Error raised within the plugin and extensions when the connection
-    to the Omni system is down.
-    """
-    pass
-
-
 class PluginExtensionRegistrar(type):
     """ Metaclass of PluginExtension which keeps track of newly imported
     PluginExtension child classes in a list.
@@ -138,11 +131,12 @@ class PluginExtension(object):
         """
         return []
 
-    def createDevices(self, props, prefix, dev_ids):
+    def createDevices(self, dev_type, props, prefix, dev_ids):
         """ this is called by the device factory UI code to create devices
-        of the type managed by this extension. Implementations should catch
+        of a type managed by this extension. Implementations should catch
         all exceptions.
         arguments:
+            dev_type -- name of device type
             props -- dictionary containing current settings of device factory
                      dialog
             dev_ids -- list of existing device_ids in the device factory group

@@ -36,104 +36,149 @@ import indigo_mock
 
 _VERSION = "0.1.0"
 
-# --- Prepare to import plugin.py. Since it depends on two modules, indigo and
-# py4j, which should not be in the test environment because they have too
-# many real world side effects, do some mocking first.
+plugin_path = os.path.abspath(
+    '../Omnilink.indigoPlugin/Contents/Server Plugin')
 
-plugin_path = os.path.abspath('../Omnilink.indigoPlugin/Contents/Server Plugin')
+# Mock away any modules that should not be in the test environment
+# because they have too many real world side effects
+
 if plugin_path not in sys.path:
     sys.path.append(plugin_path)
 
 if 'plugin' not in sys.modules:
+    sys.modules['appscript'] = MagicMock()
     sys.modules['indigo'] = indigo_mock.mock_indigo
     sys.modules['py4j'] = MagicMock()
     sys.modules['py4j.java_gateway'] = sys.modules['py4j'].java_gateway
     sys.modules['py4j.protocol'] = sys.modules['py4j'].protocol
 
-# run tests from test directory, or this will fail 
-import plugin
-from plugin import Plugin
-
 concurrent_thread_time = 0.1
+
 
 class TestException(Exception):
     pass
 
+
 class Py4JError(Exception):
     pass
 
-class PluginStartupShutdownTestCase(TestCase):
-    """Fixtures for test cases that get everything ready to start a
-    plugin, but don't actually do so...unless you are testing the
-    plugin startup and shutdown code itself, you probably want
-    PluginTestCase (see below)
+
+class Fixture(object):
+    """ A simple scheme for test fixtures. Fixtures need to implement
+    two methods:
+    setUp -- create test setup and put it in attributes of testcase
+    tearDown -- do whatever cleanup is necessary
+    """
+    def setUp(self, testcase):
+        pass
+
+    def tearDown(self):
+        pass
+
+
+def CompositeFixture(*fixture_classes):
+    """ so you can do this:
+    BiggerFixture = CompositeFixture(LittleFixture, OtherLittleFixture)
+    A newly created BiggerFixture instance will create instances
+    of the fixture classes passed to CompositeFixture. Its setUp method
+    will call their setUp methods in order and its tearDown method
+    will call their tearDown methods in reverse order.
+    """
+    class ConstructedFixture(Fixture):
+        def __init__(self):
+            self._fixtures = [cls() for cls in fixture_classes]
+
+        def setUp(self, testcase):
+            [fixture.setUp(testcase) for fixture in self._fixtures]
+
+        def tearDown(self):
+            [fixture.tearDown() for fixture in reversed(self._fixtures)]
+
+    ConstructedFixture.__name__ = str("".join((cls.__name__
+                                               for cls in fixture_classes)))
+    return ConstructedFixture
+
+
+class TestCaseWithFixtures(TestCase):
+    """ Subclass of unittest.TestCase that provides accounting of fixtures.
+    Subclasses should call:
+    setUp -- do whatever you want, but you need to call
+             TestCaseWithFixtures.setUp before using any fixtures
+    useFixture -- will create a fixture instance, run its setUp (which
+        will build test objects and assign them to the TestCase's
+        self.whatever) and add the fixture instance to the list of things
+        that need to be torn down
+    tearDown -- if a child class implements tearDown,
+             TestCaseWithFixtures.tearDown must be called to do cleanup
     """
     def setUp(self):
-        # patch subprocess.pOpen
-        self.applied_patches = []
-        self.patch_Popen()
+        self._fixtures = []
 
-        # mock up the java gateway
-        self.gateway_mock = Mock()
-        self.py4j_mock = sys.modules['py4j']
-        self.py4j_mock.java_gateway.JavaGateway.return_value = self.gateway_mock
-        self.py4j_mock.protocol.Py4JError = Py4JError
-        self.jomnilinkII_mock = self.gateway_mock.jvm.com.digitaldan.jomnilinkII
+    def useFixture(self, cls):
+        fixture = cls()
+        fixture.setUp(self)
+        self._fixtures.append(fixture)
+        return fixture
 
+    def tearDown(self):
+        [fixture.tearDown() for fixture in reversed(self._fixtures)]
+
+# ----- Shared Test Fixtures ----- #
+
+
+class POpenPatchFixture(Fixture):
+    """ No Fixture Dependencies.
+    Create a mock to be the return value from the java subprocess.
+    """
+    def setUp(self, tc):
+        """ make a Mock to pretend to be the java subprocess """
+        tc.javaproc_mock = mock.create_autospec(subprocess.Popen)
+        tc.javaproc_mock.stdout = StringIO.StringIO("stdout\n")
+        tc.javaproc_mock.stderr = StringIO.StringIO("")
+        self.popen_patcher = patch("connection.subprocess.Popen",
+                                   Mock(return_value=tc.javaproc_mock))
+        self.popen_patcher.start()
+
+    def tearDown(self):
+        self.popen_patcher.stop()
+
+
+class JavaGatewayFixture(Fixture):
+    """ No Fixture dependencies.
+    Create a mock to be the return value of py4j.JavaGateway
+    """
+    def setUp(self, tc):
+        tc.gateway_mock = Mock()
+        tc.py4j_mock = sys.modules['py4j']
+        tc.py4j_mock.java_gateway.JavaGateway.return_value = tc.gateway_mock
+        tc.py4j_mock.protocol.Py4JError = Py4JError
+        tc.jomnilinkII_mock = tc.gateway_mock.jvm.com.digitaldan.jomnilinkII
+
+
+class MockConnectionFixture(Fixture):
+    """ Depends on JavaGatewayFixture.
+    Creates a mock of the jomnilinkII Connection object.
+    """
+    def setUp(self, tc):
         # Mock up connection objects -- allow for multiple connections
-        self.connection_mocks = [Mock(), Mock()]
-        self.connection_mock = self.connection_mocks[0]
-        self.jomnilinkII_mock.Connection.side_effect = self.connection_mocks
+        tc.connection_mocks = [Mock(), Mock()]
+        tc.connection_mock = tc.connection_mocks[0]
+        tc.jomnilinkII_mock.Connection.side_effect = tc.connection_mocks
 
         # build our own callback functionality so notification and
         # disconnect listeners can be tested
         # keep separate lists for each mock connection object
-        self.notify_listeners = []
-        self.disconnect_listeners = []
-        for i in range(len(self.connection_mocks)):
-            self.connection_mocks[i].addNotificationListener.side_effect = partial(self.add_notify, i)
-            self.notify_listeners.append([])
-            self.connection_mocks[i].addDisconnectListener.side_effect = partial(self.add_disconnect, i)
-            self.disconnect_listeners.append([])
+        self.notify_listeners = tc.notify_listeners = []
+        self.disconnect_listeners = tc.disconnect_listeners = []
 
-        # reset any global state in our indigo mockup
-        indigo_mock.reset()
-
-        # indigo starts the plugin with current directory set to Server Plugin
-        # so do the same here
-        self.plugin_module = plugin
-        os.chdir(plugin_path)
-
-    def tearDown(self):
-        # use reset_mock if you are testing an error condition
-        self.assertFalse(plugin.indigo.PluginBase.errorLog.called) 
-        [patch.stop() for patch in self.applied_patches]
-
-    def patch_Popen(self):
-        """ make a Mock to pretend to be the java subprocess """
-        self.javaproc_mock = mock.create_autospec(subprocess.Popen)
-        self.javaproc_mock.stdout = StringIO.StringIO("stdout\n")
-        self.javaproc_mock.stderr = StringIO.StringIO("")
-        popen_patcher = patch("plugin.subprocess.Popen",
-                              Mock(return_value=self.javaproc_mock))
-        popen_patcher.start()
-        self.applied_patches.append(popen_patcher)
-        
-    def new_plugin(self):
-        """ create and start a plugin object """
-        props = {}
-        props["showDebugInfo"] = False
-        props["showJomnilinkIIDebugInfo"] = False
-            
-        plugin = Plugin("", "", _VERSION, props)
-
-        # patch time.sleep to short circuit the plugin's wait for
-        # its java subprocess to start
-        sleep = time.sleep
-        with patch('plugin.time.sleep') as ts:
-            ts.side_effect = lambda t: sleep(t/100)
-            plugin.startup()
-        return plugin
+        for i in range(len(tc.connection_mocks)):
+            cm = tc.connection_mocks[i]
+            cm.addNotificationListener.side_effect = partial(self.add_notify,
+                                                             i)
+            tc.notify_listeners.append([])
+            cm.addDisconnectListener.side_effect = partial(self.add_disconnect,
+                                                           i)
+            tc.disconnect_listeners.append([])
 
     def add_notify(self, i, notify_listener):
         self.notify_listeners[i].append(notify_listener)
@@ -141,8 +186,57 @@ class PluginStartupShutdownTestCase(TestCase):
     def add_disconnect(self, i, disconnect_listener):
         self.disconnect_listeners[i].append(disconnect_listener)
 
-    def run_concurrent_thread(self, time_limit):
-        self.plugin.StopThread = TestException
+
+class IndigoModuleFixture(Fixture):
+    def setUp(self, tc):
+        # reset any global state in our indigo mockup
+        indigo_mock.reset()
+
+        # run tests from test directory, or this will fail
+        import plugin
+
+        # indigo starts the plugin with current directory set to Server Plugin
+        # so do the same here
+        tc.plugin_module = plugin
+
+        os.chdir(plugin_path)
+        self.tc = tc
+
+    def tearDown(self):
+        # use reset_mock if you are testing an error condition
+        self.tc.assertFalse(
+            self.tc.plugin_module.indigo.PluginBase.errorLog.called)
+
+PluginEnvironmentFixture = CompositeFixture(POpenPatchFixture,
+                                            JavaGatewayFixture,
+                                            MockConnectionFixture,
+                                            IndigoModuleFixture)
+
+
+class NewPluginFixture(Fixture):
+    def setUp(self, tc):
+        """ create and start a plugin object """
+        props = {}
+        props["showDebugInfo"] = False
+        props["showJomnilinkIIDebugInfo"] = False
+
+        self.plugin = tc.plugin = tc.plugin_module.Plugin("", "", _VERSION,
+                                                          props)
+
+        # patch time.sleep to short circuit the plugin's wait for
+        # its java subprocess to start
+        sleep = time.sleep
+        with patch('connection.time.sleep') as ts:
+            ts.side_effect = lambda t: sleep(t/100)
+            tc.plugin.startup()
+
+    def tearDown(self):
+        self.plugin.shutdown()
+
+    @staticmethod
+    def run_concurrent_thread(tc, plugin, time_limit):
+        plugin.StopThread = TestException
+
         class local:
             now = 0
 
@@ -151,39 +245,45 @@ class PluginStartupShutdownTestCase(TestCase):
                 raise TestException("done")
             local.now += seconds
 
-        self.plugin.sleep = sleep
-        t = Thread(target=self.plugin.runConcurrentThread)
+        plugin.sleep = sleep
+        t = Thread(target=plugin.runConcurrentThread)
         t.setDaemon(True)
         t.start()
         time.sleep(0.1)
-        self.assertFalse(t.is_alive())
+        tc.assertFalse(t.is_alive())
+
+PluginStartedFixture = CompositeFixture(PluginEnvironmentFixture,
+                                        NewPluginFixture)
 
 
-class PluginTestCase(PluginStartupShutdownTestCase):
-    """ Test case parent class that starts and shuts down the plugin for you """
-    def setUp(self):
-        PluginStartupShutdownTestCase.setUp(self)
-        self.plugin = self.new_plugin()
-        self.assertFalse(self.plugin.errorLog.called)
+class ConnectionValuesFixture(Fixture):
+    # this should match the inital state in Device_Factory.xml
+    device_factory_dialog_flags = {"isConnected": False,
+                                   "error": False,
+                                   "connectionError": False,
+                                   "ipAddressError": False,
+                                   "portNumberError": False,
+                                   "encryptionKey1Error": False,
+                                   "encryptionKey2Error": False}
 
-    def tearDown(self):
-        self.assertFalse(self.plugin.errorLog.called)
-        self.plugin.shutdown()
-        PluginStartupShutdownTestCase.tearDown(self)
+    def setUp(self, tc):
+        tc.values = {"ipAddress": "192.168.1.42",
+                     "portNumber": "4444",
+                     "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                     "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                     "prefix": ""}
+        tc.values.update(self.device_factory_dialog_flags)
+        tc.values2 = {"ipAddress": "10.0.0.2",
+                      "portNumber": "4444",
+                      "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
+                      "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
+                      "prefix": ""}
+        tc.values2.update(self.device_factory_dialog_flags)
 
-   # this should match the inital state in Device_Factory.xml
-    dialog_flags = {"isConnected": False,
-                   "error" : False,
-                   "connectionError" : False,
-                   "ipAddressError" : False,
-                   "portNumberError" : False,
-                   "encryptionKey1Error" : False,
-                   "encryptionKey2Error" : False}
-        
-            
+
 def build_java_class_mimic(argnames):
     """ jomnilinkII contains many boilerplate classes that just have a
-lot of getWhatever() methods. Build mimics of them, given the list of 
+lot of getWhatever() methods. Build mimics of them, given the list of
 Whatevers they contain.
 
 JomnilinkII_status_msg_for_test = build_java_class_mimic(
@@ -199,22 +299,25 @@ class JomnilinkII_status_msg_for_test(object):
     def getStatuses(self):
         return self.Statuses
 
-Isn't Python wonderful? 
+Isn't Python wonderful?
     """
     class Result(object):
         def __init__(self, *args):
             for name, arg in zip(argnames, args):
                 setattr(self, name, arg)
+
         def toString(self):
             return " ".join(argnames)
+
     def make_method(argname):
         def method(self):
             return getattr(self, argname)
         return method
+
     for name in argnames:
         setattr(Result, "get" + name, make_method(name))
     return Result
-        
+
 JomnilinkII_ObjectStatus_for_test = build_java_class_mimic(
     ["StatusType", "Statuses"])
 
@@ -235,6 +338,15 @@ JomnilinkII_SystemTroubles_for_test = build_java_class_mimic(
 
 JomnilinkII_SystemStatus_for_test = build_java_class_mimic(
     ["BatteryReading"])
-    
-    
-            
+
+JomnilinkII_SecurityCodeValidation_for_test = build_java_class_mimic(
+    ["CodeNumber", "AuthorityLevel"])
+
+JomnilinkII_OtherEventNotifications_for_test = build_java_class_mimic(
+    ["Notifications"])
+
+mimic = build_java_class_mimic(
+    ["MessageType", "EventNumber", "TimeDataValid", "Month", "Day", "Hour",
+     "Minute", "EventType", "Parameter1", "Parameter2"])
+mimic.isTimeDataValid = mimic.getTimeDataValid
+JomnilinkII_EventLogData_for_test = mimic
