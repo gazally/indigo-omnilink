@@ -31,7 +31,7 @@ import threading
 import indigo
 import py4j
 from py4j.protocol import Py4JError
-from rep_server import start_shell_thread
+from termapp_server import start_shell_thread
 
 import connection
 from connection import Connection, ConnectionError
@@ -493,9 +493,9 @@ class Plugin(indigo.PluginBase):
         menu item.
         """
         log.debug("startInteractiveInterpreter called")
-        namespace = locals().copy()
-        namespace.update(globals())
-        start_shell_thread("OmniLink Plugin", namespace)
+        namespace = globals().copy()
+        namespace.update(locals())
+        start_shell_thread(namespace, "OmniLink")
 
 
 # ----- add methods to the Plugin class to dispatch Indigo calls ----- #
