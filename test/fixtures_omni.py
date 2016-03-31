@@ -15,128 +15,33 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-from __future__ import print_function
-from __future__ import unicode_literals
 
-import datetime
 from functools import partial
-import logging
 import mock
 from mock import patch, Mock, MagicMock
-import os
 import StringIO
-import subprocess
+from subprocess import Popen
 import sys
-from threading import Thread
-import time
-import unittest
-from unittest import TestCase
 
-import indigo_mock
-
-_VERSION = "0.1.0"
-
-plugin_path = os.path.abspath(
-    '../Omnilink.indigoPlugin/Contents/Server Plugin')
-
-# Mock away any modules that should not be in the test environment
-# because they have too many real world side effects
-
-if plugin_path not in sys.path:
-    sys.path.append(plugin_path)
-
-if 'plugin' not in sys.modules:
-    sys.modules['appscript'] = MagicMock()
-    sys.modules['indigo'] = indigo_mock.mock_indigo
-    sys.modules['py4j'] = MagicMock()
-    sys.modules['py4j.java_gateway'] = sys.modules['py4j'].java_gateway
-    sys.modules['py4j.protocol'] = sys.modules['py4j'].protocol
-
-concurrent_thread_time = 0.1
-
-
-class TestException(Exception):
-    pass
+from fixtures import (Fixture, CompositeFixture)
 
 
 class Py4JError(Exception):
     pass
 
 
-class Fixture(object):
-    """ A simple scheme for test fixtures. Fixtures need to implement
-    two methods:
-    setUp -- create test setup and put it in attributes of testcase
-    tearDown -- do whatever cleanup is necessary
-    """
-    def setUp(self, testcase):
-        pass
-
-    def tearDown(self):
-        pass
-
-
-def CompositeFixture(*fixture_classes):
-    """ so you can do this:
-    BiggerFixture = CompositeFixture(LittleFixture, OtherLittleFixture)
-    A newly created BiggerFixture instance will create instances
-    of the fixture classes passed to CompositeFixture. Its setUp method
-    will call their setUp methods in order and its tearDown method
-    will call their tearDown methods in reverse order.
-    """
-    class ConstructedFixture(Fixture):
-        def __init__(self):
-            self._fixtures = [cls() for cls in fixture_classes]
-
-        def setUp(self, testcase):
-            [fixture.setUp(testcase) for fixture in self._fixtures]
-
-        def tearDown(self):
-            [fixture.tearDown() for fixture in reversed(self._fixtures)]
-
-    ConstructedFixture.__name__ = str("".join((cls.__name__
-                                               for cls in fixture_classes)))
-    return ConstructedFixture
-
-
-class TestCaseWithFixtures(TestCase):
-    """ Subclass of unittest.TestCase that provides accounting of fixtures.
-    Subclasses should call:
-    setUp -- do whatever you want, but you need to call
-             TestCaseWithFixtures.setUp before using any fixtures
-    useFixture -- will create a fixture instance, run its setUp (which
-        will build test objects and assign them to the TestCase's
-        self.whatever) and add the fixture instance to the list of things
-        that need to be torn down
-    tearDown -- if a child class implements tearDown,
-             TestCaseWithFixtures.tearDown must be called to do cleanup
-    """
-    def setUp(self):
-        self._fixtures = []
-
-    def useFixture(self, cls):
-        fixture = cls()
-        fixture.setUp(self)
-        self._fixtures.append(fixture)
-        return fixture
-
-    def tearDown(self):
-        [fixture.tearDown() for fixture in reversed(self._fixtures)]
-
-# ----- Shared Test Fixtures ----- #
-
-
-class POpenPatchFixture(Fixture):
+class PopenPatchFixture(Fixture):
     """ No Fixture Dependencies.
     Create a mock to be the return value from the java subprocess.
     """
     def setUp(self, tc):
         """ make a Mock to pretend to be the java subprocess """
-        tc.javaproc_mock = mock.create_autospec(subprocess.Popen)
+        tc.javaproc_mock = Mock()
         tc.javaproc_mock.stdout = StringIO.StringIO("stdout\n")
         tc.javaproc_mock.stderr = StringIO.StringIO("")
-        self.popen_patcher = patch("connection.subprocess.Popen",
-                                   Mock(return_value=tc.javaproc_mock))
+        popen_mock = mock.create_autospec(Popen)
+        popen_mock.return_value = tc.javaproc_mock
+        self.popen_patcher = patch("subprocess.Popen", popen_mock)
         self.popen_patcher.start()
 
     def tearDown(self):
@@ -153,6 +58,8 @@ class JavaGatewayFixture(Fixture):
         tc.py4j_mock.java_gateway.JavaGateway.return_value = tc.gateway_mock
         tc.py4j_mock.protocol.Py4JError = Py4JError
         tc.jomnilinkII_mock = tc.gateway_mock.jvm.com.digitaldan.jomnilinkII
+
+JomnilinkIIFixture = CompositeFixture(PopenPatchFixture, JavaGatewayFixture)
 
 
 class MockConnectionFixture(Fixture):
@@ -185,75 +92,6 @@ class MockConnectionFixture(Fixture):
 
     def add_disconnect(self, i, disconnect_listener):
         self.disconnect_listeners[i].append(disconnect_listener)
-
-
-class IndigoModuleFixture(Fixture):
-    def setUp(self, tc):
-        # reset any global state in our indigo mockup
-        indigo_mock.reset()
-
-        # run tests from test directory, or this will fail
-        import plugin
-
-        # indigo starts the plugin with current directory set to Server Plugin
-        # so do the same here
-        tc.plugin_module = plugin
-
-        os.chdir(plugin_path)
-        self.tc = tc
-
-    def tearDown(self):
-        # use reset_mock if you are testing an error condition
-        self.tc.assertFalse(
-            self.tc.plugin_module.indigo.PluginBase.errorLog.called)
-
-PluginEnvironmentFixture = CompositeFixture(POpenPatchFixture,
-                                            JavaGatewayFixture,
-                                            MockConnectionFixture,
-                                            IndigoModuleFixture)
-
-
-class NewPluginFixture(Fixture):
-    def setUp(self, tc):
-        """ create and start a plugin object """
-        props = {}
-        props["showDebugInfo"] = False
-        props["showJomnilinkIIDebugInfo"] = False
-
-        self.plugin = tc.plugin = tc.plugin_module.Plugin("", "", _VERSION,
-                                                          props)
-
-        # patch time.sleep to short circuit the plugin's wait for
-        # its java subprocess to start
-        sleep = time.sleep
-        with patch('connection.time.sleep') as ts:
-            ts.side_effect = lambda t: sleep(t/100)
-            tc.plugin.startup()
-
-    def tearDown(self):
-        self.plugin.shutdown()
-
-    @staticmethod
-    def run_concurrent_thread(tc, plugin, time_limit):
-        plugin.StopThread = TestException
-
-        class local:
-            now = 0
-
-        def sleep(seconds):
-            if local.now > time_limit:
-                raise TestException("done")
-            local.now += seconds
-
-        plugin.sleep = sleep
-        t = Thread(target=plugin.runConcurrentThread)
-        t.setDaemon(True)
-        t.start()
-        time.sleep(0.1)
-        tc.assertFalse(t.is_alive())
-
-PluginStartedFixture = CompositeFixture(PluginEnvironmentFixture,
-                                        NewPluginFixture)
 
 
 class ConnectionValuesFixture(Fixture):
@@ -318,26 +156,32 @@ Isn't Python wonderful?
         setattr(Result, "get" + name, make_method(name))
     return Result
 
-JomnilinkII_ObjectStatus_for_test = build_java_class_mimic(
-    ["StatusType", "Statuses"])
-
-JomnilinkII_ZoneProperties_for_test = build_java_class_mimic(
-    ["MessageType", "Name", "Number", "ZoneType", "Area", "Options"])
-
-JomnilinkII_ObjectProperties_for_test = build_java_class_mimic(
-    ["ObjectType", "Number", "Name", "MessageType"])
-
 JomnilinkII_SystemInformation_for_test = build_java_class_mimic(
     ["Model", "Major", "Minor", "Revision", "Phone"])
-
-JomnilinkII_ZoneStatus_for_test = build_java_class_mimic(
-    ["Number", "Status", "Loop"])
 
 JomnilinkII_SystemTroubles_for_test = build_java_class_mimic(
     ["Troubles"])
 
 JomnilinkII_SystemStatus_for_test = build_java_class_mimic(
     ["BatteryReading"])
+
+JomnilinkII_ObjectProperties_for_test = build_java_class_mimic(
+    ["ObjectType", "Number", "Name", "MessageType"])
+
+JomnilinkII_ZoneProperties_for_test = build_java_class_mimic(
+    ["MessageType", "Name", "Number", "ZoneType", "Area", "Options"])
+
+JomnilinkII_UnitProperties_for_test = build_java_class_mimic(
+    ["MessageType", "Name", "Number", "UnitType"])
+
+JomnilinkII_ObjectStatus_for_test = build_java_class_mimic(
+    ["StatusType", "Statuses"])
+
+JomnilinkII_ZoneStatus_for_test = build_java_class_mimic(
+    ["Number", "Status", "Loop"])
+
+JomnilinkII_UnitStatus_for_test = build_java_class_mimic(
+    ["Number", "Status", "Time"])
 
 JomnilinkII_SecurityCodeValidation_for_test = build_java_class_mimic(
     ["CodeNumber", "AuthorityLevel"])

@@ -22,7 +22,11 @@ import unittest
 
 from mock import Mock, MagicMock, patch
 
-from fixtures_for_test import *
+from fixtures import *
+from fixtures_plugin import (PluginStartedFixture,
+                             PluginEnvironmentFixture,
+                             NewPluginFixture)
+from fixtures_omni import Py4JError, ConnectionValuesFixture
 
 
 class PluginStartQuitTestCase(TestCaseWithFixtures):
@@ -45,6 +49,7 @@ class PluginStartQuitTestCase(TestCaseWithFixtures):
         self.useFixture(NewPluginFixture)
         self.gateway_mock.shutdown.side_effect = Py4JError
         self.plugin.shutdown()
+        self.assertTrue(self.gateway_mock.shutdown.called)
         self.assertTrue(self.plugin.errorLog.called)
         self.plugin.errorLog.reset_mock()
 
@@ -167,7 +172,8 @@ class PluginCoreFunctionalityTestCase(TestCaseWithFixtures):
                         not values["isConnected"])
 
     def test_GetDeviceFactoryUIValues_MakesConnection_GivenDevice(self):
-        dev = self.plugin_module.indigo.device.create(Mock(), "none",
+        dev = self.plugin_module.indigo.device.create(Mock(),
+                                                      "omniControllerDevice",
                                                       self.values)
 
         values, errors = self.plugin.getDeviceFactoryUiValues([dev.id])

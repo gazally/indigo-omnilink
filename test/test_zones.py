@@ -22,27 +22,40 @@ import unittest
 
 from mock import Mock, MagicMock
 
-from fixtures_for_test import *
-
-# This must come after fixtures_for_test because it
-# is mocked up by fixtures_for_test
-import indigo
+from fixtures import Fixture, CompositeFixture, TestCaseWithFixtures
+from fixtures_omni import *
+from fixtures_plugin import PluginStartedFixture
 
 
 class MockObjPropAndStatusFixture(Fixture):
     """ Depends on MockConnectionFixture """
     def setUp(self, tc):
         for cm in tc.connection_mocks:
-            cm.reqObjectProperties = self.create_reqObjProperties_Mock(tc)
+            cm.reqObjectProperties.side_effect = self.create_reqObjProperties(
+                tc)
             cm.reqObjectStatus = self.create_reqObjStatus_Mock(tc)
 
-    def create_reqObjProperties_Mock(self, tc):
+    def create_reqObjProperties(self, tc):
         tc.jomnilinkII_mock.Message.MESG_TYPE_OBJ_PROP = 33
-        m1 = JomnilinkII_ZoneProperties_for_test(33, "Front Door", 1, 1, 1, 0)
-        m2 = JomnilinkII_ZoneProperties_for_test(33, "Motion", 2, 3, 1, 1)
-        m3 = JomnilinkII_ZoneProperties_for_test(33, "Smoke Det", 3, 32, 1, 3)
-        m4 = JomnilinkII_ZoneProperties_for_test(0, "", 0, 0, 0, 0)
-        reqfunc = Mock(side_effect=[m1, m2, m3, m4])
+
+        class locals:
+            i = 0
+
+        def reqfunc(mtype, a, b, c, d, e):
+            m1 = JomnilinkII_ZoneProperties_for_test(
+                33, "Front Door", 1, 1, 1, 0)
+            m2 = JomnilinkII_ZoneProperties_for_test(
+                33, "Motion", 2, 3, 1, 1)
+            m3 = JomnilinkII_ZoneProperties_for_test(
+                33, "Smoke Det", 3, 32, 1, 3)
+            m4 = JomnilinkII_ZoneProperties_for_test(0, "", 0, 0, 0, 0)
+            if mtype != tc.jomnilinkII_mock.Message.OBJ_TYPE_ZONE:
+                return m4
+            else:
+                result = [m1, m2, m3, m4][locals.i % 4]
+                locals.i += 1
+                return result
+
         return reqfunc
 
     def create_reqObjStatus_Mock(self, tc):
@@ -66,13 +79,15 @@ class CreateZoneDevicesFixture(Fixture):
             values = tc.values
         values = tc.plugin.makeConnection(values, [])
         values["deviceGroupList"] = ["omniZoneDevice"]
+        indigo = tc.plugin_module.indigo
         tc.plugin.createDevices(
             values,
             [dev.id for dev in indigo.devices.values()
              if dev.pluginProps["ipAddress"] == values["ipAddress"]])
         return values
 
-ReadyToCreateZoneDevicesFixture = CompositeFixture(MockObjPropAndStatusFixture,
+ReadyToCreateZoneDevicesFixture = CompositeFixture(MockConnectionFixture,
+                                                   MockObjPropAndStatusFixture,
                                                    ConnectionValuesFixture)
 ZoneDevicesCreatedFixture = CompositeFixture(ReadyToCreateZoneDevicesFixture,
                                              CreateZoneDevicesFixture)
@@ -87,6 +102,7 @@ class GetDeviceListTestCase(TestCaseWithFixtures):
     def test_GetDeviceList_ReturnsZone(self):
         self.plugin.makeConnection(self.values, [])
         result = self.plugin.getDeviceGroupList(None, self.values, [])
+        self.assertTrue(self.connection_mock.reqObjectProperties.called)
         self.assertTrue(("omniZoneDevice", "Zone") in result)
 
     def test_GetDeviceList_ReturnsEmptyList_OnConnectionError(self):
@@ -118,6 +134,7 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
         self.useFixture(ZoneDevicesCreatedFixture)
 
     def test_CreateDevices_CreatesDeviceForEachZone(self):
+        indigo = self.plugin_module.indigo
         self.assertEqual(len(set([dev for dev in indigo.devices.values()
                                   if dev.deviceTypeId == "omniZoneDevice"])),
                          3)
@@ -130,7 +147,7 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
         self.assertEqual(len(devices), 3)
 
     def test_DeviceStartComm_Succeeds_OnValidInput(self):
-        dev = indigo.devices["Smoke Det"]
+        dev = self.plugin_module.indigo.devices["Smoke Det"]
         self.plugin.deviceStartComm(dev)
         self.assertTrue(dev.error_state is None)
         self.assertEqual(dev.states["name"], "Smoke Det")
@@ -146,7 +163,7 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
         self.assertEqual(dev.states["hadTrouble"], False)
 
     def test_DeviceStartComm_SetsErrorState_OnConnectionError(self):
-        dev = indigo.devices["Smoke Det"]
+        dev = self.plugin_module.indigo.devices["Smoke Det"]
         self.connection_mock.reqObjectStatus.side_effect = Py4JError
 
         self.plugin.deviceStartComm(dev)
@@ -155,6 +172,7 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
         self.plugin.errorLog.reset_mock()
 
     def test_RemoveDevices_Removes_ZoneDevices(self):
+        indigo = self.plugin_module.indigo
         dev_ids = set([dev.id for dev in indigo.devices.values()
                        if dev.deviceTypeId == "omniZoneDevice"])
         self.plugin.removeDevices(self.values, list(dev_ids))
@@ -162,6 +180,7 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
             self.assertNotEqual(dev.deviceTypeId, "omniZoneDevice")
 
     def test_Notification_Changes_DeviceState(self):
+        indigo = self.plugin_module.indigo
         dev = indigo.devices["Front Door"]
         self.plugin.deviceStartComm(dev)
         self.assertTrue(dev.states["condition"] == "Secure")
@@ -178,6 +197,7 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
         self.assertTrue(dev.error_state is None)
 
     def test_DisconnectNotification_SetsErrorState_OfCorrectZoneDevice(self):
+        indigo = self.plugin_module.indigo
         devs_1 = set(
             [dev for dev in indigo.devices.values()
              if dev.pluginProps["ipAddress"] == self.values["ipAddress"]])
@@ -197,6 +217,7 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
             self.assertTrue(dev.error_state is not None)
 
     def test_ReconnectNotification_Clears_DeviceErrorState(self):
+        indigo = self.plugin_module.indigo
         devs = set(
             [dev for dev in indigo.devices.values()
              if dev.pluginProps["ipAddress"] == self.values["ipAddress"]])
@@ -212,7 +233,7 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
         self.assertTrue(dev.error_state is None)
 
     def test_DeviceStopComm_Succeeds(self):
-        dev = indigo.devices["Motion"]
+        dev = self.plugin_module.indigo.devices["Motion"]
         self.plugin.deviceStartComm(dev)
         self.plugin.deviceStopComm(dev)
 

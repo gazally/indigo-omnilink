@@ -22,17 +22,16 @@ import unittest
 
 from mock import Mock, MagicMock
 
-from fixtures_for_test import *
-
-# This must come after fixtures_for_test because it is mocked up by
-# fixtures_for_test
-import indigo
+from fixtures import Fixture, CompositeFixture, TestCaseWithFixtures
+from fixtures_plugin import PluginStartedFixture
+from fixtures_omni import *
 
 _VERSION = "0.2.0"
 
 
 class ControllerDeviceFixture(Fixture):
-    """ Fixture dependencies: PluginStartedFixture and ConnectionValuesFixture
+    """ Fixture dependencies: PluginStartedFixture, MockConnectionFixture and
+    ConnectionValuesFixture
     Create a controller device, and set up the jomnilinkII mock
     to handle reqSystemInformation, reqSystemStatus and reqSystemTroubles.
     """
@@ -58,9 +57,9 @@ class ControllerDeviceFixture(Fixture):
         values["deviceGroupList"] = ["omniControllerDevice"]
         tc.plugin.createDevices(
             values,
-            [dev.id for dev in set(indigo.devices.values())
+            [dev.id for dev in set(tc.plugin_module.indigo.devices.values())
              if dev.pluginProps["ipAddress"] == values["ipAddress"]])
-        dev = [dev for dev in indigo.devices.values()
+        dev = [dev for dev in tc.plugin_module.indigo.devices.values()
                if (dev.deviceTypeId == "omniControllerDevice" and
                    dev.pluginProps["ipAddress"] == values["ipAddress"])][0]
         return dev
@@ -75,6 +74,7 @@ class ControllerDeviceStartFixture(Fixture):
 
 ControllerDeviceStartedFixture = CompositeFixture(PluginStartedFixture,
                                                   ConnectionValuesFixture,
+                                                  MockConnectionFixture,
                                                   ControllerDeviceFixture,
                                                   ControllerDeviceStartFixture)
 
@@ -108,6 +108,7 @@ class ControllerTestCase(TestCaseWithFixtures):
     def setUp(self):
         TestCaseWithFixtures.setUp(self)
         self.useFixture(PluginStartedFixture)
+        self.useFixture(MockConnectionFixture)
         self.useFixture(ConnectionValuesFixture)
 
     def test_GetDeviceList_ReturnsController(self):
@@ -121,16 +122,18 @@ class ControllerTestCase(TestCaseWithFixtures):
         values = self.plugin.makeConnection(dict(self.values), [])
         values["deviceGroupList"] = ["omniControllerDevice"]
 
-        self.plugin.createDevices(values,
-                                  [dev.id for dev in indigo.devices.values()])
+        self.plugin.createDevices(
+            values,
+            [dev.id for dev in self.plugin_module.indigo.devices.values()])
         self.assertEqual(
-            len(set([dev for dev in indigo.devices.values()
+            len(set([dev for dev in self.plugin_module.indigo.devices.values()
                      if dev.deviceTypeId == "omniControllerDevice"])), 1)
 
-        self.plugin.createDevices(values,
-                                  [dev.id for dev in indigo.devices.values()])
+        self.plugin.createDevices(
+            values,
+            [dev.id for dev in self.plugin_module.indigo.devices.values()])
         self.assertEqual(
-            len(set([dev for dev in indigo.devices.values()
+            len(set([dev for dev in self.plugin_module.indigo.devices.values()
                      if dev.deviceTypeId == "omniControllerDevice"])), 1)
 
     def test_DeviceStartComm_Fails_OnNetworkError(self):
@@ -251,7 +254,8 @@ class ControllerTestCase(TestCaseWithFixtures):
 
         self.plugin.writeControllerInfoToLog()
 
-        self.assertTrue(self.plugin_module.indigo.server.log.call_count == 1)
+        self.assertTrue(
+            self.plugin_module.indigo.server.log.call_count == 1)
         args, kwargs = self.plugin_module.indigo.server.log.call_args
         self.assertTrue("is not connected" in args[0])
 
@@ -263,6 +267,7 @@ class ControllerDeviceTestCase(TestCaseWithFixtures):
         TestCaseWithFixtures.setUp(self)
         self.useFixture(PluginStartedFixture)
         self.useFixture(ConnectionValuesFixture)
+        self.useFixture(MockConnectionFixture)
         self.useFixture(ControllerDeviceFixture)
 
     def test_DeviceStartComm_Succeeds(self):
