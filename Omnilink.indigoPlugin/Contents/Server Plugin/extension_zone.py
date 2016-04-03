@@ -18,6 +18,8 @@
 
 """ Omni Plugin extension for Zones """
 from __future__ import unicode_literals
+
+from distutils.version import StrictVersion
 import logging
 
 import indigo
@@ -28,7 +30,11 @@ from connection import ConnectionError
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.1.0"
+_VERSION = "0.3.0"
+
+
+class OldVersionError(Exception):
+    pass
 
 
 class ZoneExtension(extensions.PluginExtension):
@@ -47,14 +53,35 @@ class ZoneExtension(extensions.PluginExtension):
         """ Start an omniZoneDevice. Query the Omni system and set the status
         of the indigo device """
 
+        try:
+            self.update_device_version(device)
+        except OldVersionError:
+            log.error('Unfortunately "{0}" was created in a previous '
+                      "version of this plugin and cannot be started. Please "
+                      "delete and redefine it.".format(device.name))
+            device.setErrorStateOnServer("OLD")
+            return
+
         if device not in self.devices:
             self.devices.append(device)
-
         self.update_device_status(device)
 
     def deviceStopComm(self, device):
+        """ Stop an OmniZoneDevice. """
         if device in self.devices:
             self.devices.remove(device)
+
+    def update_device_version(self, device):
+        """ if the device was defined in a previous version of this plugin,
+        update it and change the version number. Note that
+        replacePluginPropsOnServer calls deviceStartComm, so it's important
+        to avoid calling it if nothing needs to be changed.
+        """
+        device_version = device.pluginProps.get("deviceVersion", "0.0")
+        if (StrictVersion(device_version) >= StrictVersion(_VERSION)):
+            return
+        if StrictVersion(device_version) < StrictVersion("0.3.0"):
+            raise OldVersionError
 
     # ----- Device creation methods ----- #
 
@@ -73,16 +100,24 @@ class ZoneExtension(extensions.PluginExtension):
         return result
 
     def createDevices(self, dev_type, values, prefix, dev_ids):
-        """ Automatically create a device for each zone, unless it already
-        exists. """
-        old_devs = [
-            indigo.devices[id] for id in dev_ids
-            if indigo.devices[id].deviceTypeId == dev_type]
+        """Automatically create a device for each zone, unless it already
+        exists. Values should contain properties for the devices and
+        prefix shoudl contain a string used to prefix unique names for the
+        devices. On return values will contain additional props used
+        to create the devices.
+
+        """
         values["deviceVersion"] = _VERSION
+        values["SupportsOnState"] = True
+        values["SupportsSensorValue"] = True
+        values["SupportsStatusRequest"] = True
+
+        old_dev_numbers = [indigo.devices[id].pluginProps["number"]
+                           for id in dev_ids
+                           if indigo.devices[id].deviceTypeId == dev_type]
         try:
             for zp in self.zone_info(values).zone_props.values():
-                if not any((dev.pluginProps["number"] == zp.number
-                            for dev in old_devs)):
+                if zp.number not in old_dev_numbers:
                     self.create_device(zp, values, prefix)
         except (Py4JError, ConnectionError):
             log.error("Failed to fetch zone information from Omni Controller")
@@ -94,15 +129,43 @@ class ZoneExtension(extensions.PluginExtension):
         log.debug("Creating Zone device for {0}:{1}".format(zone_props.number,
                                                             zone_props.name))
         values["number"] = zone_props.number
+        name = self.get_unique_name(prefix, zone_props.name)
+
         kwargs = {"props": values,
                   "deviceTypeId": "omniZoneDevice"}
-        name = self.get_unique_name(prefix, zone_props.name)
         if name:
             kwargs["name"] = name
+
         newdev = indigo.device.create(indigo.kProtocol.Plugin, **kwargs)
         newdev.model = self.MODEL
         newdev.subModel = "Zone"
         newdev.replaceOnServer()
+
+    # ----- Callbacks from Indigo for device actions ----- #
+
+    def actionControlSensor(self, action, dev):
+        """ Callback from Indigo for commands to change the sensor state.
+        Not supported by Omni Zone sensors. And it's not documented, but
+        sometimes RequestStatus gets sent here, sometimes it gets sent
+        to actionControlGeneral.
+        """
+        if action.sensorAction == indigo.kSensorAction.RequestStatus:
+            indigo.server.log("sending status request to " + dev.name)
+            self.update_device_status(dev)
+            return
+
+        log.error('ignored "{0}" request: sensor "{1}" is read-only'.format(
+            action.sensorAction.name, dev.name))
+
+    def actionControlGeneral(self, action, dev):
+        """ Callback from Indigo for some general device actions """
+        if action.deviceAction == indigo.kDeviceGeneralAction.RequestStatus:
+            indigo.server.log("sending status request to " + dev.name)
+            self.update_device_status(dev)
+            return
+
+        log.error('ignored "{0}" request: action not implemented for '
+                  'sensor "{1}"'.format(action.deviceAction.name, dev.name))
 
     # ----- Callbacks from OMNI Status and events ----- #
 
@@ -113,17 +176,14 @@ class ZoneExtension(extensions.PluginExtension):
                 return
             connection_props = self.plugin.props_from_connection(connection)
             zone_info = self.zone_info(connection_props)
-            number = None
             number, status = zone_info.number_and_status_from_notification(
                 status_msg)
-        except Py4JError, ConnectionError:
+        except (Py4JError, ConnectionError):
             log.debug("status_notification exception in Zone", exc_info=True)
-
-        if number is None:
-            return
-        for dev in self.devices:
-            if dev.pluginProps["number"] == number:
-                self.update_device_from_status(dev, status)
+        else:
+            for dev in self.devices:
+                if dev.pluginProps["number"] == number:
+                    self.update_device_from_status(dev, status)
 
     def reconnect_notification(self, connection):
         connection_key = self.plugin.make_connection_key(
@@ -139,7 +199,7 @@ class ZoneExtension(extensions.PluginExtension):
         for dev in self.devices:
             if (self.plugin.make_connection_key(dev.pluginProps) ==
                     connection_key):
-                dev.setErrorStateOnServer("not connected")
+                dev.setErrorStateOnServer("disconnected")
 
     def update_device_status(self, dev):
         try:
@@ -149,24 +209,27 @@ class ZoneExtension(extensions.PluginExtension):
         except (ConnectionError, Py4JError):
             log.error("Failed to get status of zone {0} from Omni".format(
                 dev.pluginProps["number"]))
-            dev.setErrorStateOnServer("not connected")
-            return
-
-        dev.updateStateOnServer("name", props.name)
-        dev.updateStateOnServer("crossZoning", props.cross_zoning)
-        dev.updateStateOnServer("swingerShutdown", props.swinger_shutdown)
-        dev.updateStateOnServer("dialOutDelay", props.dial_out_delay)
-        dev.updateStateOnServer("type", props.type_name)
-        dev.updateStateOnServer("area", props.area)
-        self.update_device_from_status(dev, status)
-        dev.setErrorStateOnServer(None)
+            dev.setErrorStateOnServer("disconnected")
+        else:
+            dev.updateStateOnServer("name", props.name)
+            dev.updateStateOnServer("crossZoning", props.cross_zoning)
+            dev.updateStateOnServer("swingerShutdown", props.swinger_shutdown)
+            dev.updateStateOnServer("dialOutDelay", props.dial_out_delay)
+            dev.updateStateOnServer("type", props.type_name)
+            dev.updateStateOnServer("area", props.area)
+            self.update_device_from_status(dev, status)
+            dev.setErrorStateOnServer(None)
+        finally:
+            dev.refreshFromServer()
 
     def update_device_from_status(self, dev, status):
         dev.updateStateOnServer("condition", status.condition)
+        dev.updateStateOnServer("onOffState", status.condition == "Secure")
         dev.updateStateOnServer("alarmStatus", status.latched_alarm)
         dev.updateStateOnServer("armingStatus", status.arming)
         dev.updateStateOnServer("hadTrouble", status.had_trouble)
-        dev.updateStateOnServer("loop", status.loop)
+        dev.updateStateOnServer("sensorValue", status.loop,
+                                uiValue=str(status.loop))
 
     def zone_info(self, props):
         key = self.plugin.make_connection_key(props)

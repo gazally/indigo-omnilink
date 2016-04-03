@@ -102,6 +102,13 @@ class PluginExtension(object):
         getDeviceStateList
         getDeviceDisplayStateId
         didDeviceCommPropertyChange
+        actionControlGeneral
+        actionControlDimmerRelay
+        actionControlSensor
+        actionControlSpeedControl
+        actionControlThermostat
+        actionControlIO
+        actionControlSprinkler
         triggerStartProcessing
         triggerStopProcessing
         didTriggerProcessingPropertyChange

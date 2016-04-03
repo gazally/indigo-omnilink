@@ -57,8 +57,8 @@ def make_mock_indigo_module(xmls):
                          if child.tag == "Device"]
         _device_type_ids = [defn.attrib["id"] for defn in _device_defns]
         for defn in _device_defns:
-            assert defn.attrib["type"] in ["custom", "relay", "dimmer"],\
-                defn.attrib["id"]
+            assert defn.attrib["type"] in ["custom", "relay", "dimmer",
+                                           "sensor"], defn.attrib["id"]
 
         @classmethod
         def _get_device_defn(cls, device_type):
@@ -73,8 +73,11 @@ def make_mock_indigo_module(xmls):
             states = [child for child in defn if child.tag == "States"][0]
             state_ids = [st.attrib["id"] for st in states if st.tag == "State"]
             defn_type = defn.attrib["type"]
-            if defn_type == "relay" or defn_type == "dimmer":
+
+            if defn_type in ["relay", "dimmer", "sensor"]:
                 state_ids.append("onOffState")
+            if defn_type == "sensor":
+                state_ids.append("sensorValue")
             if defn_type == "dimmer":
                 state_ids.append("brightnessLevel")
             return state_ids
@@ -111,7 +114,7 @@ def make_mock_indigo_module(xmls):
             self.subModel = ""
 
         def updateStateOnServer(self, key=None, value=None,
-                                clearErrorState=True):
+                                clearErrorState=True, uiValue=""):
             assert key is not None
             assert value is not None
             assert key in DeviceForTest._get_device_state_list(
@@ -133,6 +136,14 @@ def make_mock_indigo_module(xmls):
 
         def stateListOrDisplayStateIdChanged(self):
             pass
+
+        @property
+        def onState(self):
+            return self.states["onOffState"]
+
+        @property
+        def brightness(self):
+            return self.states["brightnessLevel"]
 
     mock_indigo = MagicMock()
     mock_indigo.Dict = dict

@@ -118,14 +118,6 @@ class GetDeviceListTestCase(TestCaseWithFixtures):
         self.assertTrue(self.plugin.errorLog.called)
         self.plugin.errorLog.reset_mock()
 
-    def test_Notification_Ignores_NonZoneNotifications(self):
-        status_msg = JomnilinkII_ObjectStatus_for_test(
-            Mock(),
-            [JomnilinkII_ZoneStatus_for_test(10, 1, 100)])
-        CreateZoneDevicesFixture.create_zone_devices(self)
-        for listener in self.notify_listeners[0]:
-            listener.objectStausNotification(status_msg)
-
 
 class ZoneDeviceTestCase(TestCaseWithFixtures):
     def setUp(self):
@@ -156,11 +148,19 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
         self.assertEqual(dev.states["crossZoning"], True)
         self.assertEqual(dev.states["swingerShutdown"], True)
         self.assertEqual(dev.states["dialOutDelay"], False)
-        self.assertEqual(dev.states["loop"], 100)
+        self.assertEqual(dev.states["sensorValue"], 100)
+        self.assertTrue(dev.states["onOffState"], True)
         self.assertEqual(dev.states["condition"], "Secure")
         self.assertEqual(dev.states["alarmStatus"], "Secure")
         self.assertEqual(dev.states["armingStatus"], "Disarmed")
         self.assertEqual(dev.states["hadTrouble"], False)
+
+    def test_DeviceStartComm_WontStart_OldDevice(self):
+        dev = self.plugin_module.indigo.devices["Front Door"]
+        dev.pluginProps["deviceVersion"] = "0.0"
+        self.plugin.deviceStartComm(dev)
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
 
     def test_DeviceStartComm_SetsErrorState_OnConnectionError(self):
         dev = self.plugin_module.indigo.devices["Smoke Det"]
@@ -194,7 +194,19 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
             listener.objectStausNotification(status_msg)
 
         self.assertTrue(dev.states["condition"] == "Not Ready")
+        self.assertFalse(dev.states["onOffState"])
         self.assertTrue(dev.error_state is None)
+
+    def test_Notification_Ignores_NonZoneNotifications(self):
+        status_msg = JomnilinkII_ObjectStatus_for_test(
+            Mock(),
+            [JomnilinkII_ZoneStatus_for_test(1, 1, 100)])
+        dev = self.plugin_module.indigo.devices["Front Door"]
+        self.plugin.deviceStartComm(dev)
+
+        for listener in self.notify_listeners[0]:
+            listener.objectStausNotification(status_msg)
+        self.assertEqual(dev.states["condition"], "Secure")
 
     def test_DisconnectNotification_SetsErrorState_OfCorrectZoneDevice(self):
         indigo = self.plugin_module.indigo
@@ -231,6 +243,59 @@ class ZoneDeviceTestCase(TestCaseWithFixtures):
         self.assertTrue(dev.error_state is not None)
         self.plugin.update()  # this should get the second connection object
         self.assertTrue(dev.error_state is None)
+
+    def test_ZoneExtension_LogsError_OnUnimplementedSensorChange(self):
+        dev = self.plugin_module.indigo.devices["Smoke Det"]
+        self.plugin.deviceStartComm(dev)
+        action = Mock()
+        action.sensorAction = \
+            self.plugin_module.indigo.kSensorAction.TurnOn
+
+        self.plugin.actionControlSensor(action, dev)
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
+
+    def test_ZoneExtension_LogsError_OnUnimplementedSensorBeep(self):
+        dev = self.plugin_module.indigo.devices["Front Door"]
+        self.plugin.deviceStartComm(dev)
+        action = Mock()
+        action.deviceAction = \
+            self.plugin_module.indigo.kDeviceGeneralAction.Beep
+
+        self.plugin.actionControlGeneral(action, dev)
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
+
+    def test_Zones_UpdateSensor_OnRequestStatusAction(self):
+        dev = self.plugin_module.indigo.devices["Front Door"]
+        self.plugin.deviceStartComm(dev)
+
+        action = Mock()
+        action.deviceAction = \
+            self.plugin_module.indigo.kDeviceGeneralAction.RequestStatus
+        status_msg = JomnilinkII_ObjectStatus_for_test(
+            self.jomnilinkII_mock.Message.OBJ_TYPE_ZONE,
+            [JomnilinkII_ZoneStatus_for_test(1, 1, 100)])
+        self.connection_mock.reqObjectStatus = Mock(return_value=status_msg)
+
+        self.plugin.actionControlGeneral(action, dev)
+
+        self.assertEqual(dev.states["condition"], "Not Ready")
+        self.assertFalse(dev.states["onOffState"])
+
+    def test_RequestStatusAction_LogsError_OnConnectionError(self):
+        dev = self.plugin_module.indigo.devices["Front Door"]
+        self.plugin.deviceStartComm(dev)
+
+        action = Mock()
+        action.deviceAction = \
+            self.plugin_module.indigo.kDeviceGeneralAction.RequestStatus
+        self.connection_mock.reqObjectStatus.side_effect = Py4JError
+
+        self.plugin.actionControlGeneral(action, dev)
+
+        self.assertTrue(self.plugin.errorLog.called)
+        self.plugin.errorLog.reset_mock()
 
     def test_DeviceStopComm_Succeeds(self):
         dev = self.plugin_module.indigo.devices["Motion"]

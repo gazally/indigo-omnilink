@@ -31,6 +31,7 @@ import sys
 import tempfile
 from threading import Thread
 from time import sleep
+import traceback
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +58,11 @@ class Shell(object):
         and return a flag indicating which prompt to use next """
         with redirect_stds(stdin=self.inpipe,
                            stdout=self.outpipe, stderr=self.outpipe):
-            return self.push_func(line)
+            try:
+                return self.push_func(line)
+            except:
+                log.debug("Exception in console thread", exc_info=True)
+                print(traceback.format_exc())
 
 
 class ClientIO(StringIO):
@@ -92,7 +97,7 @@ class ClientIO(StringIO):
         StringIO.write(self, string)
         text = self.getvalue()
         while "\n" in text:
-            line, text = text.split("\n")
+            line, text = text.split("\n", 1)
             self.send_line(line)
         if text:
             self.send_partial_line(text)
@@ -100,7 +105,7 @@ class ClientIO(StringIO):
         self.truncate()
 
 
-def run_server(push, prompt, temp_path):
+def run_server(push, banner, prompt, temp_path):
     """Warning in 20 point bold type: this will delete temp_path!!!
 
     besides that, do a read-eval-print loop doing I/O through named
@@ -132,6 +137,7 @@ def run_server(push, prompt, temp_path):
                     client = ClientIO(pipeout)
                     shell = Shell(push, devnull, client)
 
+                    client.write(banner + "\n")
                     more_input = False
                     while True:
                         client.send_prompt(p2 if more_input else p1)
@@ -140,11 +146,11 @@ def run_server(push, prompt, temp_path):
                             break
                         more_input = shell.push(line[:-1])
 
-    except Exception as e:
+    except Exception:
         log.debug("Exception in interactive console thread", exc_info=True)
 
 
-def start_interaction_thread(push, prompt):
+def start_interaction_thread(push, banner, prompt):
     """ Run the python script termapp_client.py (which must be in the current
     directory) in a Terminal window. Set its current directory to the
     current directory, and pass as an argument to it the name of a temporary
@@ -155,7 +161,8 @@ def start_interaction_thread(push, prompt):
         secondary prompt should be used next and False if the primary prompt
         should be used. push should use sys.stdout and sys.stderr for its
         output, but reading from sys.stdin will just give it EOF.
-        prompt is a prefix for the prompt, " >> " will be added to make the
+    banner -- a message to print before the first prompt
+    prompt -- a prefix for the prompt, " >> " will be added to make the
         primary prompt and "... " for the secondary
     """
     path = tempfile.mkdtemp()
@@ -163,21 +170,26 @@ def start_interaction_thread(push, prompt):
     app = appscript.app("Terminal")
     app.do_script("cd {0};python termapp_client.py {1};exit".format(
         quote(os.getcwd()), quote(path)))
+    app.activate()
+
     t = Thread(target=run_server, name="console",
-               args=(push, prompt, path))
+               args=(push, banner, prompt, path))
     t.setDaemon(True)
     t.start()
     return t
 
 
-def start_shell_thread(namespace, prompt):
-    return start_interaction_thread(InteractiveConsole(namespace).push, prompt)
+def start_shell_thread(namespace, banner, prompt):
+    return start_interaction_thread(InteractiveConsole(namespace).push, banner,
+                                    prompt)
 
 
 if __name__ == "__main__":
-    namespace = locals().copy()
-    namespace.update(globals())
-    t = start_shell_thread(namespace, "[" + __file__ + "]")
+    namespace = globals().copy()
+    namespace.update(locals())
+    t = start_shell_thread(namespace, "Welcome to my shell!",
+                           "[" + __file__ + "]")
+
     while True:
         if not t.is_alive():
             break

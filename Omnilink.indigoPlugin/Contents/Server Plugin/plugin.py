@@ -219,6 +219,7 @@ class Plugin(indigo.PluginBase):
         """
         self.configure_logger(log)
         self.configure_logger(logging.getLogger("connection"))
+        self.configure_logger(logging.getLogger("termapp_server"))
         log_py4j = logging.getLogger("py4j")
         self.configure_logger(log_py4j, logging.WARNING, prefix="py4j")
 
@@ -495,112 +496,154 @@ class Plugin(indigo.PluginBase):
         log.debug("startInteractiveInterpreter called")
         namespace = globals().copy()
         namespace.update(locals())
-        start_shell_thread(namespace, "OmniLink")
+        start_shell_thread(namespace, "", "OmniLink")
 
+    # ----- Dispatch various calls to either extensions or PluginBase ----- #
 
-# ----- add methods to the Plugin class to dispatch Indigo calls ----- #
+    def getActionConfigUiValues(self, pluginProps, typeId, actionId):
+        return self.dispatch("getActionConfigUiValues", "action", typeId,
+                             pluginProps, typeId, actionId)
 
-delegator_definitions = [
-    ("getActionConfigUiValues", "action",
-     "typeId", "", ["self", "pluginProps", "typeId", "actionId"]),
+    def getDeviceConfigUiValues(self, pluginProps, typeId, devId):
+        return self.dispatch("getDeviceConfigUiValues", "device", typeId,
+                             pluginProps, typeId, devId)
 
-    ("getDeviceConfigUiValues", "device",
-     "typeId", "", ["self", "pluginProps", "typeId", "devId"]),
+    def getEventConfigUiValues(self, pluginProps, typeId, eventId):
+        return self.dispatch("getEventConfigUiValues", "event", typeId,
+                             pluginProps, typeId, eventId)
 
-    ("getEventConfigUiValues", "event",
-     "typeId", "", ["self", "pluginProps", "typeId", "eventId"]),
+    def validateActionConfigUi(self, valuesDict, typeId, actionId):
+        return self.dispatch("validateActionConfigUi", "action", typeId,
+                             valuesDict, typeId, actionId)
 
-    ("validateActionConfigUi", "action",
-     "typeId", "", ["self", "valuesDict", "typeId", "actionId"]),
+    def validateEventConfigUi(self, valuesDict, typeId, eventId):
+        return self.dispatch("validateEventConfigUi", "event", typeId,
+                             valuesDict, typeId, eventId)
 
-    ("validateEventConfigUi", "event",
-     "typeId", "", ["self", "valuesDict", "typeId", "eventId"]),
+    def validateDeviceConfigUi(self, valuesDict, typeId, devId):
+        return self.dispatch("validateDeviceConfigUi", "device", typeId,
+                             valuesDict, typeId, devId)
 
-    ("validateDeviceConfigUi", "device",
-     "typeId", "", ["self", "valuesDict", "typeId", "devId"]),
+    def closedActionConfigUi(self, valuesDict, userCancelled, typeId,
+                             actionId):
+        return self.dispatch("closedActionConfigUi", "action", typeId,
+                             valuesDict, userCancelled, typeId, actionId)
 
-    ("closedActionConfigUi", "action",
-     "typeId", "", ["self", "valuesDict", "userCancelled", "typeId",
-                    "actionId"]),
+    def closedEventConfigUi(self, valuesDict, userCancelled, typeId, eventId):
+        return self.dispatch("closedEventConfigUi", "event", typeId,
+                             valuesDict, userCancelled, typeId, eventId)
 
-    ("closedEventConfigUi", "event",
-     "typeId", "", ["self", "valuesDict", "userCancelled", "typeId",
-                    "eventId"]),
+    def closedDeviceConfigUi(self, valuesDict, userCancelled, typeId, devId):
+        return self.dispatch("closedDeviceConfigUi", "device", typeId,
+                             valuesDict, userCancelled, typeId, devId)
 
-    ("closedDeviceConfigUi", "device",
-     "typeId", "", ["self", "valuesDict", "userCancelled", "typeId", "devId"]),
+    def deviceStartComm(self, dev):
+        return self.dispatch("deviceStartComm", "device", dev.deviceTypeId,
+                             dev)
 
-    ("deviceStartComm", "device", "dev", "deviceTypeId", ["self", "dev"]),
+    def deviceStopComm(self, dev):
+        return self.dispatch("deviceStopComm", "device", dev.deviceTypeId,
+                             dev)
 
-    ("deviceStopComm", "device", "dev", "deviceTypeId", ["self", "dev"]),
+    def deviceCreated(self, dev):
+        return self.dispatch("deviceCreated", "device", dev.deviceTypeId,
+                             dev)
 
-    ("deviceCreated", "device", "dev", "deviceTypeId", ["self", "dev"]),
+    def deviceDeleted(self, dev):
+        return self.dispatch("deviceDeleted", "device", dev.deviceTypeId,
+                             dev)
 
-    ("deviceDeleted", "device", "dev", "deviceTypeId", ["self", "dev"]),
+    def deviceUpdated(self, origDev, newDev):
+        return self.dispatch("deviceUpdated", "device", origDev.deviceTypeId,
+                             origDev, newDev)
 
-    ("deviceUpdated", "device",
-     "origDev", "deviceTypeId", ["self", "origDev", "newDev"]),
+    def getDeviceStateList(self, dev):
+        return self.dispatch("getDeviceStateList", "device", dev.deviceTypeId,
+                             dev)
 
-    ("getDeviceStateList", "device", "dev", "deviceTypeId", ["self", "dev"]),
+    def getDeviceDisplayStateId(self, dev):
+        return self.dispatch("getDeviceDisplayStateId", "device",
+                             dev.deviceTypeId,
+                             dev)
 
-    ("getDeviceDisplayStateId", "device",
-     "dev", "deviceTypeId", ["self", "dev"]),
+    def didDeviceCommPropertyChange(self, origDev, newDev):
+        return self.dispatch("didDeviceCommPropertyChange", "device",
+                             origDev.deviceTypeId,
+                             origDev, newDev)
 
-    ("didDeviceCommPropertyChange", "device",
-     "origDev", "deviceTypeId", ["self", "origDev", "newDev"]),
+    def actionControlGeneral(self, action, dev):
+        return self.dispatch("actionControlGeneral", "device",
+                             dev.deviceTypeId,
+                             action, dev)
 
-    ("triggerStartProcessing", "event",
-     "trigger", "pluginTypeId", ["self", "trigger"]),
+    def actionControlDimmerRelay(self, action, dev):
+        return self.dispatch("actionControlDimmerRelay", "device",
+                             dev.deviceTypeId,
+                             action, dev)
 
-    ("triggerStopProcessing", "event",
-     "trigger", "pluginTypeId", ["self", "trigger"]),
+    def actionControlSensor(self, action, dev):
+        return self.dispatch("actionControlSensor", "device", dev.deviceTypeId,
+                             action, dev)
 
-    ("didTriggerProcessingPropertyChange", "event",
-     "origTrigger", "pluginTypeId", ["self", "origTrigger", "newTrigger"]),
+    def actionControlSpeedControl(self, action, dev):
+        return self.dispatch("actionControlSpeedControl", "device",
+                             dev.deviceTypeId,
+                             action, dev)
 
-    ("triggerCreated", "event",
-     "trigger", "pluginTypeId", ["self", "trigger"]),
+    def actionControlThermostat(self, action, dev):
+        return self.dispatch("actionControlThermostat", "device",
+                             dev.deviceTypeId,
+                             action, dev)
 
-    ("triggerUpdated", "event",
-     "origTrigger", "pluginTypeId", ["self", "origTrigger", "newTrigger"]),
+    def actionControlIO(self, action, dev):
+        return self.dispatch("actionControlIO", "device", dev.deviceTypeId,
+                             action, dev)
 
-    ("triggerDeleted", "event",
-     "trigger", "pluginTypeId", ["self", "trigger"]),
-    ]
+    def actionControlSprinkler(self, action, dev):
+        return self.dispatch("actionControlSprinkler", "device",
+                             dev.deviceTypeId,
+                             action, dev)
 
+    def triggerStartProcessing(self, trigger):
+        return self.dispatch("triggerStartProcessing", "event",
+                             trigger.pluginTypeId,
+                             trigger)
 
-def make_delegator_func(name, selector, arg_name, arg_attr, argspec):
-    """ Rather than have a whole lot of repetitive declarations in the Plugin
-    class to dispatch execution of 23 different methods to the appropriate
-    plugin extension, build them based on a table.
-    arguments:
-    name -- name to give new function
-    selector -- one of "device", "event" and "action"
-    arg_name -- name of argument to constructed function which contains the
-                device/event/action type id
-    arg_attr -- if the type id is an attribute of the argument arg_name
-                this is the name of the attribute
-    argspec --  list of arguments to constructed function, to assist in
-                locating arg_name by position
+    def triggerStopProcessing(self, trigger):
+        return self.dispatch("triggerStopProcessing", "event",
+                             trigger.pluginTypeId,
+                             trigger)
 
-    """
-    def delegator(self, *args, **kwargs):
-        id = (kwargs[arg_name] if arg_name in kwargs
-              else args[argspec.index(arg_name) - 1])
-        if arg_attr:
-            id = getattr(id, arg_attr)
-        if id in self.type_ids_map[selector]:
-            ext = self.type_ids_map[selector][id]
+    def didTriggerProcessingPropertyChange(self, origTrigger, newTrigger):
+        return self.dispatch("didTriggerProcessingPropertyChange", "event",
+                             origTrigger.pluginTypeId,
+                             origTrigger, newTrigger)
+
+    def triggerCreated(self, trigger):
+        return self.dispatch("triggerCreated", "event",
+                             trigger.pluginTypeId,
+                             trigger)
+
+    def triggerUpdated(self, origTrigger, newTrigger):
+        return self.dispatch("triggerUpdated", "event",
+                             origTrigger.pluginTypeId,
+                             origTrigger, newTrigger)
+
+    def triggerDeleted(self, trigger):
+        return self.dispatch("triggerDeleted", "event",
+                             trigger.pluginTypeId,
+                             trigger)
+
+    def dispatch(self, name, selector, type_id, *args):
+        if type_id in self.type_ids_map[selector]:
+            ext = self.type_ids_map[selector][type_id]
             if hasattr(ext, name):
-                return getattr(ext, name)(*args, **kwargs)
+                return getattr(ext, name)(*args)
         else:
             log.debug("No matching plugin extension found for {0} {1} "
-                      "method {2}".format(selector, id, name))
+                      "method {2}".format(selector, type_id, name))
 
-        return getattr(indigo.PluginBase, name)(self, *args, **kwargs)
-
-    setattr(delegator, "__name__", str(name))
-    return delegator
-
-for args in delegator_definitions:
-    setattr(Plugin, args[0], make_delegator_func(*args))
+        if hasattr(indigo.PluginBase, name):
+            return getattr(indigo.PluginBase, name)(self, *args)
+        else:
+            return None

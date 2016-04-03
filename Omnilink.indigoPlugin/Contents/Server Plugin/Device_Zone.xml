@@ -1,6 +1,7 @@
-<Device type="custom" id="omniZoneDevice">
+<Device type="sensor" id="omniZoneDevice">
   <Name>Omni II Zone</Name>
   <States>
+    <!-- onOffState and sensorValue are inherited from the sensor type device -->
     <State id="number">
       <ValueType>Integer</ValueType>
       <TriggerLabel>Number:</TriggerLabel>
@@ -36,11 +37,6 @@
       <TriggerLabel>Area:</TriggerLabel>
       <ControlPageLabel>Area:</ControlPageLabel>
     </State>
-    <State id="loop">
-      <ValueType>Integer</ValueType>
-      <TriggerLabel>Analog Loop Reading:</TriggerLabel>
-      <ControlPageLabel>Analog Loop Reading:</ControlPageLabel>
-    </State>
     <State id="condition">
       <ValueType>String</ValueType>
       <TriggerLabel>Condition:</TriggerLabel>
@@ -62,5 +58,5 @@
       <ControlPageLabel>Had Trouble:</ControlPageLabel>
     </State>
   </States>
-  <UiDisplayStateId>condition</UiDisplayStateId>  
+  <UiDisplayStateId>condition</UiDisplayStateId>
 </Device>

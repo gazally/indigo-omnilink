@@ -166,9 +166,236 @@
     </Field>
   </ConfigUI>
 </DeviceFactory>
-<Device type="custom" id="omniZoneDevice">
+
+<Device type="dimmer" id="omniStandardX10Unit">
+  <Name>Standard X10 Control</Name>
+  <States>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniExtendedX10Unit">
+  <Name>Extended X10 Control</Name>
+  <States>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniComposeX10Unit">
+  <Name>Compose X10 Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniUPBUnit">
+  <Name>UPB Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniHLCRoomUnit">
+  <Name>HLC Room Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniHLCLoadUnit">
+  <Name>HLC Load Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniLuminaModeUnit">
+  <Name>Lumina Mode Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniRadioRAUnit">
+  <Name>Radio RA Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniCentraLiteUnit">
+  <Name>CentraLite Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniViziaRFRoomUnit">
+  <Name>Vizia RF Room Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniViziaRFLoadUnit">
+  <Name>Vizia RF Load Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="relay" id="omniFlagUnit">
+  <Name>Omni Controller Flag</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="relay" id="omniVoltageUnit">
+  <Name>Voltage Output Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="relay" id="omniAudioZoneUnit">
+  <Name>Audio Zone Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="relay" id="omniAudioSourceUnit">
+  <Name>Audio Source Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="sensor" id="omniZoneDevice">
   <Name>Omni II Zone</Name>
   <States>
+    <!-- onOffState and sensorValue are inherited from the sensor type device -->
     <State id="number">
       <ValueType>Integer</ValueType>
       <TriggerLabel>Number:</TriggerLabel>
@@ -204,11 +431,6 @@
       <TriggerLabel>Area:</TriggerLabel>
       <ControlPageLabel>Area:</ControlPageLabel>
     </State>
-    <State id="loop">
-      <ValueType>Integer</ValueType>
-      <TriggerLabel>Analog Loop Reading:</TriggerLabel>
-      <ControlPageLabel>Analog Loop Reading:</ControlPageLabel>
-    </State>
     <State id="condition">
       <ValueType>String</ValueType>
       <TriggerLabel>Condition:</TriggerLabel>
@@ -230,6 +452,6 @@
       <ControlPageLabel>Had Trouble:</ControlPageLabel>
     </State>
   </States>
-  <UiDisplayStateId>condition</UiDisplayStateId>  
+  <UiDisplayStateId>condition</UiDisplayStateId>
 </Device>
 </Devices>
