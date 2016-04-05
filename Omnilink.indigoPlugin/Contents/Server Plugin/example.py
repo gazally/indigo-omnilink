@@ -1,11 +1,30 @@
+#! /usr/bin/env python
+# Translation of jomnilinkII's examples/main.java into Python
+#
+# Copyright (C) 2016 Gemini Lasswell
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+""" Example usage of jomnilinkII from Python """
 from __future__ import unicode_literals
 from __future__ import print_function
 
 import datetime
 from time import sleep
 
+import py4j
 from py4j.java_gateway import JavaGateway, CallbackServerParameters
-
+gateway = None
 
 class NotificationListener(object):
     def __init__(self, Message):
@@ -146,6 +165,7 @@ def log_event_log_entry(m):
 
 
 def main():
+    global gateway
     gateway = JavaGateway(
         start_callback_server=True,
         callback_server_parameters=CallbackServerParameters())
@@ -246,6 +266,7 @@ def main():
 
     print(c.uploadNames(Message.OBJ_TYPE_UNIT, 0).toString())
 
+    print("Searching for user codes. This will take several minutes.")
     for i in range(1, 10000):
         s = [ord(ch) - ord("0") for ch in "{0:04}".format(i)]
         for a in range(1, 3):
@@ -253,11 +274,37 @@ def main():
             if scv.getAuthorityLevel() != 0:
                 print("{0:04}/{1}: {2}", i, a, scv.toString())
 
-    print("All Done, OmniConnection thread now running")
+    print("All done, now listening for notifications")
 
     while True:
         sleep(10)
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except py4j.protocol.Py4JNetworkError:
+        print(
+"""Unable to find the java process to communicate with. From a
+separate Terminal window, with its current directory set to the plugin
+source directory, you can start it with this command, and stop it by
+typing Control-C.
+
+jre/bin/java -classpath java/lib/py4j/py4j0.9.1.jar:java/build/jar/OmniForPy.jar me.gazally.main.MainEntryPoint
+
+Disable the OmniLink plugin before starting java (if you are running
+it on the same machine).  """)
+
+    except IOError:
+        print(
+"""Missing omni.txt. Please create a three line text file containing
+the URL or IP address of your Omni system, the port number used to
+access it, and its encryption key. For example:
+
+192.168.1.10
+4444
+01-23-45-67-89-AB-CD-EF-0F-1E-2D-3C-4B-5A-69-78
+""")
+    finally:
+        if gateway is not None:
+            gateway.shutdown()

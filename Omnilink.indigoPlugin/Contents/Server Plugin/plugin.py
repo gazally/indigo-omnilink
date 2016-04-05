@@ -90,7 +90,7 @@ class Plugin(indigo.PluginBase):
         Connection.shutdown()
 
     def update(self):
-        for dev_id, connection in self.connections.items():
+        for connection in self.connections.values():
             connection.update()
         for ext in self.extensions:
             ext.update()
@@ -256,12 +256,8 @@ class Plugin(indigo.PluginBase):
             handler.setFormatter(logging.Formatter(prefix + "%(message)s"))
             return handler
 
-        # the reason for only adding a handler if there isn't already one
-        # is that repeatedly running this code during unit testing
-        # ends up adding a handler for each test
-        if not logger.handlers:
-            logger.addHandler(make_handler(self.debugLog, self.errorLog,
-                                           prefix))
+        logger.addHandler(make_handler(self.debugLog, self.errorLog,
+                                       prefix))
         logger.setLevel(level)
         if propagate is not None:
             logger.propagate = propagate

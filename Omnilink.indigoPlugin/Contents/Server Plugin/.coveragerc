@@ -1,0 +1,16 @@
+[run]
+include = plugin.py
+	  connection.py
+	  extension_*.py
+          test/test_*.py
+
+[report]
+include = plugin.py
+	  connection.py
+	  extension_*.py
+          test/test_*.py
+
+show_missing = True
+exclude_lines = log.debug
+                return self.dispatch
+		

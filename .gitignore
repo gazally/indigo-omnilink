@@ -3,4 +3,6 @@
 *.class
 .coverage
 omni.txt
+*.venv
+.cache
 

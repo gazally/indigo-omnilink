@@ -1,1 +1,0 @@
-nosetests -m '(?:\b)[Tt]est' -verbosity=3 --nologcapture --with-coverage --cover-package plugin --cover-package extension_zone --cover-package extension_controller --cover-package connection --cover-package extension_unit --cover-erase

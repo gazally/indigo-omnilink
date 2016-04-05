@@ -90,7 +90,7 @@ class Connection(object):
             self._omni.enableNotifications()
             log.debug("Successful connection to Omni system at " + self.ip)
 
-        except:
+        except Py4JError:
             log.error("Unable to establish connection with Omni system")
             log.debug("Details of Omni Network Communication error: ",
                       exc_info=True)
