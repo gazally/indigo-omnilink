@@ -182,3 +182,29 @@ def test_get_device_factory_uivalues_makes_connection_given_device(
     values, errors = plugin.getDeviceFactoryUiValues([dev.id])
     assert len(errors) == 0
     assert values["isConnected"]
+
+
+def recurse_elem(root):
+    """ recursively iterate the elements of an XML tree """
+    for elem in root:
+        yield elem
+        for subelem in recurse_elem(elem):
+            yield subelem
+
+
+def iterate_callbacks(root):
+    """ traverse an xml tree and yield all the callback methods found """
+    for e in recurse_elem(root):
+        if e.tag == "CallbackMethod":
+            yield e.text
+        elif "method" in e.attrib:
+            yield e.attrib["method"]
+
+
+def test_callbacks_exist(plugin, xmls):
+    missing = set()
+    for method in list(iterate_callbacks(xmls.values())):
+        if (not hasattr(plugin, method) or
+                not callable(getattr(plugin, method))):
+            missing.add(method)
+    assert not missing
