@@ -396,3 +396,132 @@ def test_other_event_notification_ignores_message_for_stopped_device(
     omni1._notify("otherEventNotification", trigger_event)
 
     assert not indigo.trigger.execute.called
+
+
+def test_generate_keypad_list_checks_keypad_count(
+        plugin, omni1, started_controller_device, jomnilinkII):
+
+    omni1.reqObjectTypeCapacities.return_value.getCapacity.return_value = 8
+
+    values = {}
+    plugin.getActionConfigUiValues(values, "checkSecurityCode",
+                                   started_controller_device.id)
+    tups = plugin.generateConsoleList(None, values,
+                                      "enableConsoleBeeper",
+                                      started_controller_device.id)
+    assert omni1.reqObjectTypeCapacities.called_with(
+        jomnilinkII.Message.OBJ_TYPE_CONSOLE)
+
+    assert len(tups) == 9
+
+
+def test_enable_disable_keypad_beeper_sends_command(
+        plugin, indigo, omni1, started_controller_device, jomnilinkII):
+    action = Mock()
+    action.deviceId = started_controller_device.id
+    action.props = {"consoleNumber": "3"}
+    action.pluginTypeId = "enableConsoleBeeper"
+
+    plugin.enableConsoleBeeper(action)
+
+    CM = jomnilinkII.MessageTypes.CommandMessage
+    assert omni1.controllerCommand.called_with(
+        CM.CMD_CONSOLE_ENABLE_DISABLE_BEEPER, 1, 3)
+
+    action.props["consoleNumber"] = "0"
+    action.pluginTypeId = "disableConsoleBeeper"
+    plugin.disableConsoleBeeper(action)
+
+    assert omni1.controllerCommand.called_with(
+        CM.CMD_CONSOLE_ENABLE_DISABLE_BEEPER, 0, 0)
+
+
+def test_enable_disable_keypad_handles_network_error(
+        plugin, plugin_module, indigo, omni1, started_controller_device):
+    action = Mock()
+    action.deviceId = started_controller_device.id
+    action.props = {"consoleNumber": "3"}
+    action.pluginTypeId = "enableConsoleBeeper"
+
+    omni1.connected.side_effect = plugin_module.ConnectionError
+    plugin.enableConsoleBeeper(action)
+
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+
+def test_enable_disable_keypad_beeper_handles_unconfigured_action(
+        plugin, started_controller_device):
+    action = Mock()
+    action.deviceId = started_controller_device.id
+    action.props = {}
+    action.pluginTypeId = "enableConsoleBeeper"
+
+    plugin.enableConsoleBeeper(action)
+
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+
+def test_send_keypad_beep_sends_command(
+        plugin, indigo, omni1, started_controller_device, jomnilinkII):
+    action = Mock()
+    action.deviceId = started_controller_device.id
+    action.props = {"consoleNumber": "0",
+                    "beepCommand": "beepOff"}
+    action.pluginTypeId = "sendBeepCommand"
+    CM = jomnilinkII.MessageTypes.CommandMessage
+
+    plugin.sendBeepCommand(action)
+
+    assert omni1.controllerCommand.called_with(CM.CMD_CONSOLE_BEEP, 0, 0)
+
+    action.props["consoleNumber"] = "4"
+    action.props["beepCommand"] = "beep5"
+    action.pluginTypeId = "sendBeepCommand"
+    plugin.sendBeepCommand(action)
+
+    assert omni1.controllerCommand.called_with(
+        CM.CMD_CONSOLE_ENABLE_DISABLE_BEEPER, 6, 1)
+
+
+def test_send_keypad_beep_handles_network_error(
+        plugin, py4j, omni1, started_controller_device):
+    action = Mock()
+    action.deviceId = started_controller_device.id
+    action.props = {"consoleNumber": "0",
+                    "beepCommand": "beepOn"}
+    action.pluginTypeId = "sendBeepCommand"
+
+    omni1.controllerCommand.side_effect = py4j.protocol.Py4JError
+
+    plugin.sendBeepCommand(action)
+
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+
+def test_send_keypad_beep_error_checks_when_scripted(
+        plugin, started_controller_device):
+    action = Mock()
+    action.deviceId = started_controller_device.id
+    action.props = {"consoleNumber": "0",
+                    "beepCommand": "doTheHokeyPokey"}
+    action.pluginTypeId = "sendBeepCommand"
+
+    plugin.sendBeepCommand(action)
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+
+def test_send_keypad_beep_handles_unconfigured_action(
+        plugin, started_controller_device):
+    action = Mock()
+    action.deviceId = started_controller_device.id
+    action.props = {}
+    action.pluginTypeId = "sendBeepCommand"
+
+    plugin.sendBeepCommand(action)
+
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()

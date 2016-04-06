@@ -208,3 +208,20 @@ def test_callbacks_exist(plugin, xmls):
                 not callable(getattr(plugin, method))):
             missing.add(method)
     assert not missing
+
+
+def test_plugin_extensions_match_xml_ids(plugin, xmls):
+    action_ids = [a.attrib["id"] for a in xmls["Actions"]
+                  if a and a.tag == "Action"]
+    for a in action_ids:
+        assert a in plugin.type_ids_map["action"].keys()
+
+    device_ids = [d.attrib["id"] for d in xmls["Devices"]
+                  if d and d.tag == "Device"]
+    for d in device_ids:
+        assert d in plugin.type_ids_map["device"].keys()
+
+    event_ids = [e.attrib["id"] for e in xmls["Events"]
+                 if e and e.tag == "Event"]
+    for e in event_ids:
+        assert e in plugin.type_ids_map["event"].keys()

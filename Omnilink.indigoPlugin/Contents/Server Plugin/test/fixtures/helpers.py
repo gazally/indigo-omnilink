@@ -34,4 +34,4 @@ def run_concurrent_thread(plugin, time_limit):
         local.now += seconds
 
     plugin.sleep = sleep
-    plugin.runConcurrentThread
+    plugin.runConcurrentThread()

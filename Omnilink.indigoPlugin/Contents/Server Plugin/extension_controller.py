@@ -34,7 +34,6 @@ log = logging.getLogger(__name__)
 _VERSION = "0.2.0"
 
 # to do -- update the battery reading periodically (like once a day)
-# action - console beepers enable/disable/beep n times
 # action - set time in controller automatically
 # to do - UIDisplayStateId should be based on troubles not connection
 # action - acknowledge troubles
@@ -44,7 +43,10 @@ class ControllerExtension(extensions.PluginExtension):
     """Omni plugin extension for Controller devices """
     def __init__(self):
         self.type_ids = {"device": ["omniControllerDevice"],
-                         "action": ["checkSecurityCode"],
+                         "action": ["checkSecurityCode",
+                                    "enableConsoleBeeper",
+                                    "disableConsoleBeeper",
+                                    "sendBeepCommand"],
                          "event": ["phoneLineDead", "phoneLineRing",
                                    "phoneLineOffHook", "phoneLineOnHook",
                                    "ACPowerOff", "ACPowerOn",
@@ -61,7 +63,11 @@ class ControllerExtension(extensions.PluginExtension):
 
         self.callbacks = {
             "writeControllerInfoToLog": self.writeControllerInfoToLog,
-            "checkSecurityCode": self.checkSecurityCode
+            "checkSecurityCode": self.checkSecurityCode,
+            "generateConsoleList": self.generateConsoleList,
+            "enableConsoleBeeper": self.enableDisableConsoleBeeper,
+            "disableConsoleBeeper": self.enableDisableConsoleBeeper,
+            "sendBeepCommand": self.sendBeepCommand
         }
         self.controller_info = {}
 
@@ -341,7 +347,7 @@ class ControllerExtension(extensions.PluginExtension):
             dev_id = int(trigger.pluginProps["controllerId"])
             triggers = self.triggers[dev_id][trigger.pluginTypeId]
             triggers.remove(trigger.id)
-        except KeyError, ValueError:
+        except (KeyError, ValueError):
             log.debug("Couldn't stop trigger because it wasn't started")
 
     # ----- Action Item Config UI ----- #
@@ -350,9 +356,36 @@ class ControllerExtension(extensions.PluginExtension):
         """ called by the Indigo UI before the Action configuration dialog
         is shown to the user.
         """
+        log.debug("getActionConfigUiValues called")
         errors = indigo.Dict()
-        values["device_id"] = device_id
+
+        if type_id == "sendBeepCommand" and not values.get("beepCommand", ""):
+            values["beepCommand"] = "beepOff"
+
+        if type_id in ["sendBeepCommand", "enableConsoleBeeper",
+                       "disableConsoleBeeper"]:
+            if not values.get("consoleNumber", ""):
+                values["consoleNumber"] = "0"
+
         return (values, errors)
+
+    def generateConsoleList(self, filter, values, type_id, device_id):
+        log.debug("generateConsoleList called, {0}, {1}, {2}, {3}".format(
+            filter, values, type_id, device_id))
+        results = [("0", "All Keypads")]
+        device = indigo.devices[device_id]
+        try:
+            c = self.plugin.make_connection(device.pluginProps)
+            M = c.jomnilinkII.Message
+            count = c.omni.reqObjectTypeCapacities(
+                M.OBJ_TYPE_CONSOLE).getCapacity()
+            results = results + [(str(i), "Keypad {0}".format(i))
+                                 for i in range(1, count + 1)]
+        except (Py4JError, ConnectionError):
+            log.error("Failed to get keypad count from Omni controller")
+            log.debug("", exc_info=True)
+
+        return results
 
     def validateActionConfigUi(self, values, type_id, action_id):
         """ called by the Indigo UI to validate the values dictionary
@@ -360,10 +393,12 @@ class ControllerExtension(extensions.PluginExtension):
         """
         log.debug("Action Validation called for %s" % type_id)
         errors = indigo.Dict()
-
         if (StrictVersion(values.get("actionVersion", "0.0")) <
                 StrictVersion(_VERSION)):
             values["actionVersion"] = _VERSION
+
+        if type_id != "checkSecurityCode":
+            return (not errors, values, errors)
 
         code = values["code"]
         if "%%" in code:
@@ -407,6 +442,8 @@ class ControllerExtension(extensions.PluginExtension):
         dev = indigo.devices[action.deviceId]
         code = self.plugin.substitute(action.props.get("code", ""))
         area = self.plugin.substitute(action.props.get("area", ""))
+        log.debug("checkSecurity code called for code {0} in area {1}".format(
+            code, area))
 
         if not self.is_valid_code(code):
             log.error("checkSecurityCode asked to validate "
@@ -430,12 +467,67 @@ class ControllerExtension(extensions.PluginExtension):
                               scv.getCodeNumber()))
                 return
 
-            except Py4JError, ConnectionError:
+            except (Py4JError, ConnectionError):
                 log.error("Error communicating with Omni Controller")
                 log.debug("", exc_info=True)
 
         self.update_last_checked_code(dev, code=code, area=area,
                                       authority="Error")
+
+    def enableDisableConsoleBeeper(self, action):
+        """ Callback for enableConsoleBeeper and disableConsoleBeeper. """
+        dev = indigo.devices[action.deviceId]
+        if not action.props.get("consoleNumber", False):
+            log.error("{0} not configured".format(action.pluginTypeId))
+            return
+        log.debug('{0} called for device "{1}" console {2}'.format(
+            action.pluginTypeId, dev.name, action.props["consoleNumber"]))
+
+        enable = 1 if action.pluginTypeId == "enableConsoleBeeper" else 0
+        try:
+            c = self.plugin.make_connection(dev.pluginProps)
+            CM = c.jomnilinkII.MessageTypes.CommandMessage
+            console = int(action.props["consoleNumber"])
+            c.omni.controllerCommand(CM.CMD_CONSOLE_ENABLE_DISABLE_BEEPER,
+                                     enable, console)
+        except (Py4JError, ConnectionError):
+            log.error("Error sending beep enable/disable to Omni Controller")
+            log.debug("", exc_info=True)
+        except ValueError:
+            log.error('"{0}" is not a valid console number'.format(
+                action.props["consoleNumber"]))
+
+    def sendBeepCommand(self, action):
+        """ Callback for sendBeepCommand """
+        dev = indigo.devices[action.deviceId]
+        if not action.props.get("consoleNumber", False):
+            log.error("{0} not configured".format(action.pluginTypeId))
+            return
+
+        log.debug('sendBeepCommand called to send {0} to device "{1}" '
+                  'console {2}'.format(action.props["beepCommand"], dev.name,
+                                       action.props["consoleNumber"]))
+        try:
+            c = self.plugin.make_connection(dev.pluginProps)
+            CM = c.jomnilinkII.MessageTypes.CommandMessage
+            console = int(action.props["consoleNumber"])
+            beep = action.props["beepCommand"]
+            if beep == "beepOff":
+                beep_code = 0
+            elif beep == "beepOn":
+                beep_code = 1
+            else:  # beep will be beepN with N between 1 and 5
+                beep_code = int(beep[-1]) + 1
+
+            c.omni.controllerCommand(CM.CMD_CONSOLE_BEEP, beep_code, console)
+        except (Py4JError, ConnectionError):
+            log.error("Error sending beep command to Omni Controller")
+            log.debug("", exc_info=True)
+        except ValueError:
+            log.error("{0} is not a valid console number or "
+                      "{1} is not a valid beep command".format(
+                          action.props["consoleNumber"],
+                          action.props["beepCommand"]))
 
     # ----- Menu Item Callbacks ----- #
 

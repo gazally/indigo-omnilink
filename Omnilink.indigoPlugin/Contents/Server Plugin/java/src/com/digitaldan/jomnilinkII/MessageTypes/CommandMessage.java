@@ -1,8 +1,8 @@
 package com.digitaldan.jomnilinkII.MessageTypes;
 
 /**
-*  Copyright (C) 2009  Dan Cunningham                                         
-*                                                                             
+*  Copyright (C) 2009  Dan Cunningham
+*
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
 * as published by the Free Software Foundation, version 2
@@ -25,7 +25,7 @@ public class CommandMessage implements Message {
 	private int command;
 	private int parameter1;
 	private int parameter2;
-	
+
 	/*
 	 *COMMAND MESSAGES
 Command message are used to send immediate control commands to an HAI controller or connected security
@@ -377,7 +377,7 @@ Command Parameter 1 Parameter 2       Description
 	public static int CMD_UNIT_LEVITON_SCENE_OFF = 60;
 	public static int CMD_UNIT_LEVITON_SCENE_ON = 60;
 	public static int CMD_UNIT_LEVITON_SCENE_SET = 60;
-	
+
 	public static int CMD_SECURITY_OMNI_DISARM = 48;
 	public static int CMD_SECURITY_OMNI_DAY_MODE = 49;
 	public static int CMD_SECURITY_OMNI_NIGHT_MODE = 50;
@@ -393,11 +393,11 @@ Command Parameter 1 Parameter 2       Description
 	public static int CMD_SECURITY_LUMINA_AWAY_MODE = 51;
 	public static int CMD_SECURITY_LUMINA_VACATION_MODE = 52;
 	public static int CMD_SECURITY_LUMINA_PARTY_MODE = 53;
-	public static int CMD_SECURITY_LUMINA_SPECIAL_MODE = 54; 
-	
+	public static int CMD_SECURITY_LUMINA_SPECIAL_MODE = 54;
+
 	public static int CMD_ENERGY_SAVER_OFF = 64;
 	public static int CMD_ENERGY_SAVER_ON = 65;
-	
+
 	public static int CMD_THERMO_SET_HEAT_POINT = 66;
 	public static int CMD_THERMO_SET_COOL_POINT = 67;
 	public static int CMD_THERMO_SET_SYSTEM_MODE = 68;
@@ -405,7 +405,7 @@ Command Parameter 1 Parameter 2       Description
 	public static int CMD_THERMO_RAISE_LOWER_HEAT = 71;
 	public static int CMD_THERMO_RAISE_LOWER_COOL = 71;
 	public static int CMD_THERMO_SET_HOLD_MODE = 70;
-	
+
 	public static int CMD_MESSAGE_SHOW_MESSAGE_WITH_BEEP_AND_LED = 80;
 	public static int CMD_MESSAGE_SHOW_MESSAGE_WITH_BEEP_OR_LED = 86;
 	public static int CMD_MESSAGE_LOG_MESSAGE = 81;
@@ -413,22 +413,22 @@ Command Parameter 1 Parameter 2       Description
 	public static int CMD_MESSAGE_SAY_MESSAGE = 83;
 	public static int CMD_MESSAGE_PHONE_AND_SAY_MESSAGE = 84;
 	public static int CMD_MESSAGE_SEND_MESSAGE_TO_SERIAL_PORT = 85;
-	
+
 	public static int CMD_CONSOLE_ENABLE_DISABLE_BEEPER = 102;
-	public static int CMD_CONSOLE_BEEP = 102;
-	
+	public static int CMD_CONSOLE_BEEP = 103;
+
 	public static int CMD_AUDIO_ZONE_SET_ON_AND_MUTE = 112;
 	public static int CMD_AUDIO_ZONE_SET_VOLUME = 113;
 	public static int CMD_AUDIO_ZONE_SET_SOURCE = 114;
 	public static int CMD_AUDIO_ZONE_SELECT_KEY = 115;
-	
-	
-	
-	
-	
-	
-	
-	
+
+
+
+
+
+
+
+
 	public CommandMessage(int command, int parameter1, int parameter2) {
 		super();
 		this.command = command;
@@ -455,13 +455,13 @@ Command Parameter 1 Parameter 2       Description
 	public String toString() {
 	    final String TAB = "    ";
 	    String retValue = "";
-	    
+
 	    retValue = "CommandMessage ( "
 	        + "command = " + this.command + TAB
 	        + "parameter1 = " + this.parameter1 + TAB
 	        + "parameter2 = " + this.parameter2 + TAB
 	        + " )";
-	
+
 	    return retValue;
 	}
 }
