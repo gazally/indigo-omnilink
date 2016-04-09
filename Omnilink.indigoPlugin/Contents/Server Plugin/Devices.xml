@@ -87,10 +87,10 @@
   <ButtonTitle>Close</ButtonTitle>
   <ConfigUI>
     <Field id="explanation" type="label">
-      <Label>Please enter the following information from the Setup menu on your Omni system keypad:</Label>
+      <Label>Please enter the following information from the Setup menu on your Omni system keypad, or from the configuration values you are using for Snap-Link:</Label>
     </Field>
     <Field id="ipAddress" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
-      <Label>IP Address:</Label>
+      <Label>IP or Web Address:</Label>
     </Field>
     <Field id="portNumber" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
       <Label>Port:</Label>
@@ -111,13 +111,12 @@
     <Field id="connectSuccess" type="label" fontSize="small" alignWithControl="true" visibleBindingId="isConnected" visibleBindingValue="true">
       <Label>Your Omni Controller is communicating with Indigo.</Label>
     </Field>
-    
-    <Field id="deviceFactoryVersion" type="textfield" hidden="true" devaultValue="0.1.0"/>
+
+    <Field id="deviceFactoryVersion" type="textfield" hidden="true" devaultValue="0.3.0"/>
 
     <Field id="isConnected" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="error" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="connectionError" type="checkbox" hidden="true" defaultValue="false"/>
-    <Field id="ipAddressError" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="portNumberError" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="encryptionKey1Error" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="encryptionKey2Error" type="checkbox" hidden="true" defaultValue="false"/>
@@ -131,7 +130,7 @@
       <Label>Device types:</Label>
       <List class="self" method="getDeviceGroupList" dynamicReload="true" />
     </Field>
-    <Field id="addDevices" type="button" enabledBindingId="deviceGroupList" visibleBindingId="error" visibleBindingValue="false"> 
+    <Field id="addDevices" type="button" enabledBindingId="deviceGroupList" visibleBindingId="error" visibleBindingValue="false">
       <Title>Create Selected Device Types</Title>
       <CallbackMethod>createDevices</CallbackMethod>
     </Field>
@@ -143,9 +142,6 @@
     <Field id="connectionErrorMessage" type="label" fontColor="red" visibleBindingId="connectionError" visibleBindingValue="true">
       <Label>Unable to connect with your Omni system. Please recheck the information from the Setup menu, as well as your network cable and firmware version.</Label>
     </Field>
-    <Field id="ipAddressErrorMessage" type="label" fontColor="red" visibleBindingId="ipAddressError" visibleBindingValue="true">
-      <Label>Please enter the controller IP address from the Setup menu on your Omni system keypad.</Label>
-    </Field>
     <Field id="portNumberErrorMessage" type="label" fontColor="red" visibleBindingId="portNumberError" visibleBindingValue="true">
       <Label>Please enter the controller port number from the Setup menu on your Omni system keypad.</Label>
     </Field>
@@ -155,9 +151,9 @@
     <Field id="encryptionKey2ErrorMessage" type="label" fontColor="red" visibleBindingId="encryptionKey2Error" visibleBindingValue="true">
       <Label>Please enter the encryption key part 2 from the Setup menu on your Omni system keypad.</Label>
     </Field>
-    
+
     <Field type="separator" id="sep2"/>
-    
+
     <Field id="nameDescription" type="label">
       <Label>Automatically create names for new devices starting with:</Label>
     </Field>

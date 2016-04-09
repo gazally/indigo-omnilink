@@ -21,7 +21,7 @@ import threading
 import time
 
 from py4j.java_gateway import JavaGateway, CallbackServerParameters
-from py4j.protocol import Py4JError
+from py4j.protocol import Py4JError, Py4JJavaError
 
 log = logging.getLogger(__name__)
 
@@ -90,12 +90,17 @@ class Connection(object):
             self._omni.enableNotifications()
             log.debug("Successful connection to Omni system at " + self.ip)
 
-        except Py4JError:
-            log.error("Unable to establish connection with Omni system")
-            log.debug("Details of Omni Network Communication error: ",
+        except Py4JError as e:
+            message = ""
+            if isinstance(e, Py4JJavaError):
+                try:
+                    message = ": " + e.args[1].getMessage()
+                except (IndexError, Py4JError):
+                    log.debug("Couldn't decode Py4JJavaError", exc_info=True)
+            log.error("Unable to establish connection with Omni system" +
+                      message)
+            log.debug("Details of communication failure: ",
                       exc_info=True)
-            log.error("After you correct the problem, please restart the "
-                      "Omni Link plugin")
             self._omni = None
 
         if reconnecting:

@@ -29,7 +29,6 @@ def device_factory_flags():
     return {"isConnected": False,
             "error": False,
             "connectionError": False,
-            "ipAddressError": False,
             "portNumberError": False,
             "encryptionKey1Error": False,
             "encryptionKey2Error": False}
@@ -66,8 +65,7 @@ def invalid_device_factory_fields(device_factory_fields):
     marked as errors.
     """
     values = dict(device_factory_fields)
-    invalid_values = {"ipAddress": "not an ip address",
-                      "portNumber": "not a port",
+    invalid_values = {"portNumber": "not a port",
                       "encryptionKey1": "not an encryption key",
                       "encryptionKey2": "still not an encryption key"}
     values.update(invalid_values)

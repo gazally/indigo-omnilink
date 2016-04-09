@@ -340,7 +340,7 @@ class Plugin(indigo.PluginBase):
         """ Called by the Indigo UI to check values for the Device
         Factory dialog, when the user closes it, and also by the
         callback for the Connect button (see below). This checks the
-        syntax of the ip address, port number and encryption keys, and
+        syntax of the port number and encryption keys, and
         then tries to connect. """
         log.debug("Device Factory Config Validation called")
         errors = self.checkConnectionParameters(values)
@@ -370,11 +370,6 @@ class Plugin(indigo.PluginBase):
             values["portNumber"] = str(int(values["portNumber"]))
         return errors
 
-    def is_valid_ip(self, ip):
-        m = re.match(r"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$", ip)
-        return (m is not None and
-                all(map(lambda n: 0 <= int(n) <= 255, m.groups())))
-
     def is_valid_port_number(self, port):
         return (re.match(r"\d{1,5}", port) is not None and
                 0 < int(port) < 65536)
@@ -386,9 +381,6 @@ class Plugin(indigo.PluginBase):
                    "encryptionKey1", "encryptionKey2"]
 
     dialog_value_checks = {
-        "ipAddress": (is_valid_ip,
-                      "Please enter the controller IP address from the "
-                      "Setup menu on your Omni system keypad."),
         "portNumber": (is_valid_port_number,
                        "Please enter the controller port number from the "
                        "Setup menu on your Omni system keypad."),
@@ -411,7 +403,7 @@ class Plugin(indigo.PluginBase):
         """
         log.debug("makeConnection called")
         ok, values, errors = self.validateDeviceFactoryUi(values, dev_ids)
-        for k in self.dialog_keys:
+        for k in self.dialog_value_checks.keys():
             values[k + "Error"] = k in errors
         values["connectionError"] = "showAlertText" in errors
 

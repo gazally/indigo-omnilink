@@ -27,6 +27,10 @@ class Py4JError(Exception):
     pass
 
 
+class Py4JJavaError(Py4JError):
+    pass
+
+
 @pytest.fixture(scope="session")
 def mock_appscript():
     """ Put a mock in sys.modules so that import appscript will work """
@@ -47,6 +51,7 @@ def mock_py4j():
     """ Put a mock in sys.modules so that import py4j will work """
     m = MagicMock()
     m.protocol.Py4JError = Py4JError
+    m.protocol.Py4JJavaError = Py4JJavaError
 
     sys.modules["py4j"] = m
     sys.modules['py4j.java_gateway'] = sys.modules['py4j'].java_gateway

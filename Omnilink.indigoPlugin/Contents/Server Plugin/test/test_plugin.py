@@ -123,8 +123,7 @@ def test_device_factory_uivalidation_fails_invalid_input(
 def test_make_connection_clears_error_state_on_valid_input(
         plugin, device_factory_fields):
     values = dict(device_factory_fields)
-    errors = {"ipAddressError": True,
-              "portNumberError": True,
+    errors = {"portNumberError": True,
               "encryptionKey1Error": True,
               "encryptionKey2Error": True,
               "error": True}
@@ -141,7 +140,6 @@ def test_make_connection_clears_error_state_on_valid_input(
 
 def test_make_connection_sets_error_state_on_invalid_input(
         plugin, invalid_device_factory_fields):
-
     values, errorkeys = invalid_device_factory_fields
 
     values = plugin.makeConnection(values, [])
@@ -154,12 +152,12 @@ def test_make_connection_sets_error_state_on_invalid_input(
 
 def test_make_connection_sets_error_state_on_failure_to_connect(
         plugin, py4j, jomnilinkII, device_factory_fields):
-    jomnilinkII.Connection.side_effect = py4j.protocol.Py4JError
+    jomnilinkII.Connection.side_effect = py4j.protocol.Py4JJavaError("test")
 
     values = plugin.makeConnection(device_factory_fields, [])
 
     assert values["error"]
-    keys = ["ipAddress", "portNumber", "encryptionKey1", "encryptionKey2"]
+    keys = ["portNumber", "encryptionKey1", "encryptionKey2"]
     for k in keys:
         assert not values[k + "Error"]
     assert values["connectionError"]
