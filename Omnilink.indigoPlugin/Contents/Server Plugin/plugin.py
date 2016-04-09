@@ -627,7 +627,7 @@ class Plugin(indigo.PluginBase):
             ext = self.type_ids_map[selector][type_id]
             if hasattr(ext, name):
                 return getattr(ext, name)(*args)
-        else:
+        elif type_id:
             log.debug("No matching plugin extension found for {0} {1} "
                       "method {2}".format(selector, type_id, name))
 

@@ -43,7 +43,7 @@ class ZoneExtension(extensions.PluginExtension):
         self.type_ids = {"device": ["omniZoneDevice"],
                          "action": [],
                          "event": []}
-        self.devices = []
+        self.device_ids = []
         self._zone_info = {}
         self.callbacks = {}
 
@@ -62,14 +62,16 @@ class ZoneExtension(extensions.PluginExtension):
             device.setErrorStateOnServer("OLD")
             return
 
-        if device not in self.devices:
-            self.devices.append(device)
+        log.debug('Starting device "{0}"'.format(device.name))
+        if device.id not in self.device_ids:
+            self.device_ids.append(device.id)
         self.update_device_status(device)
 
     def deviceStopComm(self, device):
         """ Stop an OmniZoneDevice. """
-        if device in self.devices:
-            self.devices.remove(device)
+        if device.id in self.device_ids:
+            log.debug('Stopping device "{0}"'.format(device.name))
+            self.device_ids.remove(device.id)
 
     def update_device_version(self, device):
         """ if the device was defined in a previous version of this plugin,
@@ -181,14 +183,19 @@ class ZoneExtension(extensions.PluginExtension):
         except (Py4JError, ConnectionError):
             log.debug("status_notification exception in Zone", exc_info=True)
         else:
-            for dev in self.devices:
-                if dev.pluginProps["number"] == number:
+            connection_key = self.plugin.make_connection_key(connection_props)
+            for dev_id in self.device_ids:
+                dev = indigo.devices[dev_id]
+                if (self.plugin.make_connection_key(dev.pluginProps) ==
+                        connection_key and
+                        dev.pluginProps["number"] == number):
                     self.update_device_from_status(dev, status)
 
     def reconnect_notification(self, connection):
         connection_key = self.plugin.make_connection_key(
             self.plugin.props_from_connection(connection))
-        for dev in self.devices:
+        for dev_id in self.device_ids:
+            dev = indigo.devices[dev_id]
             if (self.plugin.make_connection_key(dev.pluginProps) ==
                     connection_key):
                 self.update_device_status(dev)
@@ -196,7 +203,8 @@ class ZoneExtension(extensions.PluginExtension):
     def disconnect_notification(self, connection, e):
         connection_key = self.plugin.make_connection_key(
             self.plugin.props_from_connection(connection))
-        for dev in self.devices:
+        for dev_id in self.device_ids:
+            dev = indigo.devices[dev_id]
             if (self.plugin.make_connection_key(dev.pluginProps) ==
                     connection_key):
                 dev.setErrorStateOnServer("disconnected")
@@ -219,8 +227,6 @@ class ZoneExtension(extensions.PluginExtension):
             dev.updateStateOnServer("area", props.area)
             self.update_device_from_status(dev, status)
             dev.setErrorStateOnServer(None)
-        finally:
-            dev.refreshFromServer()
 
     def update_device_from_status(self, dev, status):
         dev.updateStateOnServer("condition", status.condition)

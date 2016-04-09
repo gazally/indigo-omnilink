@@ -60,10 +60,12 @@ class ControlUnitExtension(extensions.PluginExtension):
                          "event": []}
         self.type_ids["device"] = [devtype for devtype, name
                                    in self.device_types.values()]
-
-        self.devices = defaultdict(list)
-        self._unit_info = {}
         self.callbacks = {}
+
+        # key is device type, list contains device id's
+        self.device_ids = defaultdict(list)
+
+        self._unit_info = {}
 
     # ----- Device Start and Stop Methods ----- #
 
@@ -71,14 +73,16 @@ class ControlUnitExtension(extensions.PluginExtension):
         """Start one of the control unit devices. Query the Omni system and
         set the status of the indigo device.
         """
-        if device not in self.devices[device.deviceTypeId]:
-            self.devices[device.deviceTypeId].append(device)
+        log.debug('Starting device "{0}"'.format(device.name))
+        if device.id not in self.device_ids[device.deviceTypeId]:
+            self.device_ids[device.deviceTypeId].append(device.id)
 
         self.update_device_status(device)
 
     def deviceStopComm(self, device):
-        if device in self.devices[device.deviceTypeId]:
-            self.devices[device.deviceTypeId].remove(device)
+        if device.id in self.device_ids[device.deviceTypeId]:
+            log.debug('Stopping device "{0}"'.format(device.name))
+            self.device_ids[device.deviceTypeId].remove(device.id)
 
     # ----- Device creation methods ----- #
 
@@ -206,24 +210,26 @@ class ControlUnitExtension(extensions.PluginExtension):
                 return
             connection_props = self.plugin.props_from_connection(connection)
             unit_info = self.unit_info(connection_props)
-            number = None
             number, status = unit_info.number_and_status_from_notification(
                 status_msg)
         except Py4JError, ConnectionError:
             log.debug("status_notification exception in Unit", exc_info=True)
-
-        if number is None:
-            return
-        for devs_of_type in self.devices.values():
-            for dev in devs_of_type:
-                if dev.pluginProps["number"] == number:
-                    self.update_device_from_status(dev, status)
+        else:
+            connection_key = self.plugin.make_connection_key(connection_props)
+            for dev_ids_of_type in self.device_ids.values():
+                for dev_id in dev_ids_of_type:
+                    dev = indigo.devices[dev_id]
+                    if (self.plugin.make_connection_key(dev.pluginProps) ==
+                            connection_key and
+                            dev.pluginProps["number"] == number):
+                        self.update_device_from_status(dev, status)
 
     def reconnect_notification(self, connection):
         connection_key = self.plugin.make_connection_key(
             self.plugin.props_from_connection(connection))
-        for devs_of_type in self.devices.values():
-            for dev in devs_of_type:
+        for dev_ids_of_type in self.device_ids.values():
+            for dev_id in dev_ids_of_type:
+                dev = indigo.devices[dev_id]
                 if (self.plugin.make_connection_key(dev.pluginProps) ==
                         connection_key):
                     self.update_device_status(dev)
@@ -231,8 +237,9 @@ class ControlUnitExtension(extensions.PluginExtension):
     def disconnect_notification(self, connection, e):
         connection_key = self.plugin.make_connection_key(
             self.plugin.props_from_connection(connection))
-        for devs_of_type in self.devices.values():
-            for dev in devs_of_type:
+        for dev_ids_of_type in self.device_ids.values():
+            for dev_id in dev_ids_of_type:
+                dev = indigo.devices[dev_id]
                 if (self.plugin.make_connection_key(dev.pluginProps) ==
                         connection_key):
                     dev.setErrorStateOnServer("not connected")

@@ -55,7 +55,7 @@ class ControllerExtension(extensions.PluginExtension):
                                    "digitalCommunicatorModuleOK",
                                    "energyCostLow", "energyCostMid",
                                    "energyCostHigh", "energyCostCritical"]}
-        self.devices = []
+        self.device_ids = []
 
         # for each device contains a dict
         # which maps event type -> list of triggers
@@ -76,17 +76,17 @@ class ControllerExtension(extensions.PluginExtension):
     def deviceStartComm(self, device):
         """ start an omniControllerDevice. Query the Omni system and set
         the states of the indigo device. """
-        log.debug("Starting device {0}".format(device.id))
-        if device not in self.devices:
-            self.devices.append(device)
+        log.debug('Starting device "{0}"'.format(device.name))
+        if device not in self.device_ids:
+            self.device_ids.append(device.id)
             self.triggers[device.id] = defaultdict(list)
             self.update_device_version(device)
             self.update_device_status(device)
 
     def deviceStopComm(self, device):
-        if device in self.devices:
-            log.debug("Stopping device {0}".format(device.id))
-            self.devices.remove(device)
+        if device.id in self.device_ids:
+            log.debug('Stopping device "{0}"'.format(device.name))
+            self.device_ids.remove(device.id)
             del self.triggers[device.id]
 
     # ----- Maintenance of device states ----- #
@@ -135,8 +135,6 @@ class ControllerExtension(extensions.PluginExtension):
             log.debug("", exc_info=True)
             device.updateStateOnServer("connected", False)
             device.setErrorStateOnServer("not connected")
-
-        device.refreshFromServer()
 
     authority = {0: "Invalid",
                  1: "Master",
@@ -317,7 +315,8 @@ class ControllerExtension(extensions.PluginExtension):
         """
         connection_key = self.plugin.make_connection_key(
             self.plugin.props_from_connection(connection))
-        for dev in self.devices:
+        for dev_id in self.device_ids:
+            dev = indigo.devices[dev_id]
             if (self.plugin.make_connection_key(dev.pluginProps) ==
                     connection_key):
                 return dev
@@ -348,7 +347,7 @@ class ControllerExtension(extensions.PluginExtension):
             triggers = self.triggers[dev_id][trigger.pluginTypeId]
             triggers.remove(trigger.id)
         except (KeyError, ValueError):
-            log.debug("Couldn't stop trigger because it wasn't started")
+            pass  # deviceStopComm already removed it from the list
 
     # ----- Action Item Config UI ----- #
 
