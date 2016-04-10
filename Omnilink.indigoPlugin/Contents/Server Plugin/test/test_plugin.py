@@ -21,6 +21,7 @@ from __future__ import unicode_literals
 
 from mock import Mock
 
+import fixtures.jomnilinkII as jomni_mimic
 import fixtures.helpers as helpers
 
 
@@ -45,6 +46,12 @@ def test_shutdown_handles_exceptions(plugin, gateway, py4j):
     assert gateway.shutdown.called
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
+
+
+def test_plugin_dispatches_to_pluginbase(plugin, indigo, monkeypatch):
+    indigo.PluginBase.actionControlSprinkler = Mock()
+    plugin.actionControlSprinkler(Mock(), Mock())
+    assert indigo.PluginBase.actionControlSprinkler.called
 
 
 def test_debug_menu_item_toggles(plugin):
@@ -223,3 +230,62 @@ def test_plugin_extensions_match_xml_ids(plugin, xmls):
                  if e and e.tag == "Event"]
     for e in event_ids:
         assert e in plugin.type_ids_map["event"].keys()
+
+
+def test_write_controller_info_to_log_succeeds(plugin, omnis, jomnilinkII,
+                                               device_factory_fields,
+                                               device_factory_fields_2):
+    mock_capacities = Mock()
+    mock_capacities.getCapacity.return_value = 2
+    mock_features = Mock()
+    mock_features.getFeatures.return_value = ["features"]
+    mock_statuses = Mock()
+    mock_statuses.getStatuses.return_value = [Mock()]
+    mock_log = create_uploadEventLogData(jomnilinkII)
+
+    for omni in omnis:
+        omni.reqObjectTypeCapacities.return_value = mock_capacities
+        omni.reqSystemFeatures.return_value = mock_features
+        omni.uploadEventLogData = mock_log
+
+    plugin.makeConnection(device_factory_fields, [])
+    plugin.makeConnection(device_factory_fields_2, [])
+    plugin.writeControllerInfoToLog()
+
+
+def test_write_controller_info_to_log_handles_failed_startup(
+        indigo, plugin, omni1, omni2, jomnilinkII, monkeypatch,
+        device_factory_fields):
+    plugin.makeConnection(device_factory_fields, [])
+    omni1.connected.return_value = False
+    omni2.connected.return_value = False
+    indigo.server.log.reset_mock()
+
+    plugin.writeControllerInfoToLog()
+
+    indigo.server.log.call_count == 1
+    args, kwargs = indigo.server.log.call_args
+    assert "is not connected" in args[0]
+
+
+def create_uploadEventLogData(jomnilinkII):
+    mtype = jomnilinkII.Message.MESG_TYPE_EVENT_LOG_DATA = 99
+
+    class locals:
+        objs = [
+            jomni_mimic.EventLogData(
+                mtype, 0, 3, 28, 10, 30, 135, 8, 0, True),
+            jomni_mimic.EventLogData(
+                mtype, 0, 3, 28, 10, 30, 4, 254, 4, True),
+            jomni_mimic.EventLogData(
+                mtype, 0, 3, 28, 10, 30, 138, 0, 1, False),
+            jomni_mimic.EventLogData(
+                0, 0, 3, 28, 10, 30, 0, 0, 0, False)]
+        index = 0
+
+    def looper(a, b):
+        retval = locals.objs[locals.index % len(locals.objs)]
+        locals.index += 1
+        return retval
+
+    return looper

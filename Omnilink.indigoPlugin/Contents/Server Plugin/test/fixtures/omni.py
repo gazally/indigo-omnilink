@@ -97,19 +97,24 @@ def omni2(omnis):
     return omnis[1]
 
 
+def repeat_endlessly(things):
+    i = 0
+    while True:
+        yield things[i % len(things)]
+        i += 1
+
+
 @pytest.fixture
 def req_object_properties(omni_zone_props, omni_unit_props, omni_end_of_data,
                           jomnilinkII_message):
     """ Return a stand-in for jomnilinkII.Connection.reqObjectProperties """
 
-    def repeat_endlessly(things):
-        i = 0
-        while True:
-            yield things[i % len(things)]
-            i += 1
-
     zones = repeat_endlessly(omni_zone_props + [omni_end_of_data])
     units = repeat_endlessly(omni_unit_props + [omni_end_of_data])
+    other = repeat_endlessly(
+        [jomni_mimic.ObjectProperties(Mock(), "test", 1,
+                                      jomnilinkII_message.MESG_TYPE_OBJ_PROP),
+         omni_end_of_data])
 
     def reqfunc(mtype, a, b, c, d, e):
         if mtype == jomnilinkII_message.OBJ_TYPE_ZONE:
@@ -117,14 +122,16 @@ def req_object_properties(omni_zone_props, omni_unit_props, omni_end_of_data,
         elif mtype == jomnilinkII_message.OBJ_TYPE_UNIT:
             return next(units)
         else:
-            return omni_end_of_data
+            return next(other)
 
     return reqfunc
 
 
 @pytest.fixture
-def req_object_status(jomnilinkII_message):
+def req_object_status(jomnilinkII_message, omni_unit_statuses):
     """ Return a stand-in for jomnilinkII.Connection.reqObjectStatus. """
+    unit_statuses = repeat_endlessly(omni_unit_statuses)
+
     def reqfunc(mtype, x, y):
         if mtype == jomnilinkII_message.OBJ_TYPE_ZONE:
             return jomni_mimic.ObjectStatus(
@@ -132,9 +139,7 @@ def req_object_status(jomnilinkII_message):
                 [jomni_mimic.ZoneStatus(0, 0, 100)])
 
         elif mtype == jomnilinkII_message.OBJ_TYPE_UNIT:
-            return jomni_mimic.ObjectStatus(
-                jomnilinkII_message.OBJ_TYPE_UNIT,
-                [jomni_mimic.UnitStatus(0, 0, 0)])
+            return next(unit_statuses)
         else:
             return jomni_mimic.ObjectStatus(Mock(), [Mock()])
     return reqfunc
@@ -174,7 +179,14 @@ def omni_messages(req_object_properties, req_object_status):
                  2,    # firmware revision
                  "")),  # local phone number
             ("reqSystemStatus", "return_value",
-             jomni_mimic.SystemStatus(200)),  # battery reading
+             jomni_mimic.SystemStatus(200,     # battery_reading
+                                      16, 2, 14, 11, 13, 14,  # time
+                                      5, 30,   # sunrise
+                                      18, 30,  # sunset
+                                      3,       # day of week
+                                      {2: 3},   # alarms
+                                      True,  # valid time data
+                                      False)),  # daylight savings time
             ("reqSystemTroubles", "return_value",
             # Freeze, Battery Low, AC Power, Phone Line
              jomni_mimic.SystemTroubles([1, 2, 3, 4])),
@@ -213,7 +225,14 @@ def omni_messages_2(req_object_properties, req_object_status):
                  254,  # firmware revision
                  "")),   # local phone number
             ("reqSystemStatus", "return_value",
-             jomni_mimic.SystemStatus(0)),  # battery reading
+             jomni_mimic.SystemStatus(0,        # battery_reading
+                                      0, 0, 0, 0, 0, 0,
+                                      0, 0,
+                                      0, 0,     # time data
+                                      0,         # day of week
+                                      {1: 1},    # alarms
+                                      False,    # valid time data
+                                      False)),  # daylight savings
             ("reqSystemTroubles", "return_value",
             # digital communicator, fuse
              jomni_mimic.SystemTroubles([5, 6])),
@@ -240,7 +259,7 @@ def omni2_system_messages_asserts(dev):
         assert dev.states[t] == val
 
 
-@pytest.fixture()
+@pytest.fixture
 def omni_zone_props(jomnilinkII_message):
     """ Return a list of three different ZoneProperties messages. """
     mtype_prop = jomnilinkII_message.MESG_TYPE_OBJ_PROP
@@ -275,17 +294,31 @@ def req_object_props_zone_states():
                           "dialOutDelay": False}}
 
 
-@pytest.fixture()
+@pytest.fixture
 def omni_end_of_data(jomnilinkII_message):
     return jomni_mimic.EndOfData(jomnilinkII_message.MESG_TYPE_END_OF_DATA)
 
 
-@pytest.fixture()
+@pytest.fixture
 def omni_unit_props(jomnilinkII_message):
     mtype = jomnilinkII_message.MESG_TYPE_OBJ_PROP
     return [jomni_mimic.UnitProperties(mtype, "X10 Unit", 1, 1),
             jomni_mimic.UnitProperties(mtype, "Radio RA", 2, 8),
             jomni_mimic.UnitProperties(mtype, "Voltage", 3, 13)]
+
+
+@pytest.fixture
+def omni_unit_statuses(jomnilinkII_message):
+    return [jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_UNIT,
+                                     [jomni_mimic.UnitStatus(0, 0, 0)]),
+            jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_UNIT,
+                                     [jomni_mimic.UnitStatus(0, 25, 30)]),
+            jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_UNIT,
+                                     [jomni_mimic.UnitStatus(0, 37, 30)]),
+            jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_UNIT,
+                                     [jomni_mimic.UnitStatus(0, 150, 45)]),
+            jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_UNIT,
+                                     [jomni_mimic.UnitStatus(0, 250, 30)])]
 
 
 @pytest.fixture(scope="session")

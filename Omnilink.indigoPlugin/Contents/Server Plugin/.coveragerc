@@ -13,4 +13,4 @@ include = plugin.py
 show_missing = True
 exclude_lines = log.debug
                 return self.dispatch
-		
+		pass

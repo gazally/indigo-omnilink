@@ -17,23 +17,27 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-def build_java_class_mimic(argnames):
+def build_java_class_mimic(name, argnames, flagnames=[]):
     """ jomnilinkII contains many boilerplate classes that just have a
 lot of getWhatever() methods. Build mimics of them, given the list of
 Whatevers they contain.
 
-Status_Msg = build_java_class_mimic(
-    ["StatusType", "Statuses"])
+Status_Msg = build_java_class_mimic("Status_Msg",
+    ["StatusType", "Statuses"], ["Valid"])
 
 is equivalent to this:
 
 class Status_Msg(object):
-    def __init__(self, StatusType, Statuses):
+    def __init__(self, StatusType, Statuses, Valid):
         self.StatusType, self.Statuses = StatusType, Statuses
+        self.Valid = Valid
     def getStatusType(self):
         return self.StatusType
     def getStatuses(self):
         return self.Statuses
+    def isValid(self):
+        return self.Valid
+
     def toString(self):
         return " ".join(argnames)
 
@@ -41,7 +45,7 @@ Isn't Python wonderful?
     """
     class Result(object):
         def __init__(self, *args):
-            for name, arg in zip(argnames, args):
+            for name, arg in zip(argnames + flagnames, args):
                 setattr(self, name, arg)
 
         def toString(self):
@@ -54,46 +58,59 @@ Isn't Python wonderful?
 
     for name in argnames:
         setattr(Result, "get" + name, make_method(name))
+    for name in flagnames:
+        setattr(Result, "is" + name, make_method(name))
+    Result.__name__ = name
     return Result
 
 SystemInformation = build_java_class_mimic(
+    "SystemInformation",
     ["Model", "Major", "Minor", "Revision", "Phone"])
 
-SystemTroubles = build_java_class_mimic(
-    ["Troubles"])
+SystemTroubles = build_java_class_mimic("SystemTroubles", ["Troubles"])
 
 SystemStatus = build_java_class_mimic(
-    ["BatteryReading"])
+    "SystemStatus",
+    ["BatteryReading", "Year", "Month", "Day", "Hour", "Minute", "Second",
+     "SunriseHour", "SunriseMinute", "SunsetHour", "SunsetMinute", "DayOfWeek",
+     "Alarms"], ["TimeDateValid", "DaylightSavings"])
 
 ObjectProperties = build_java_class_mimic(
+    "ObjectProperties",
     ["ObjectType", "Number", "Name", "MessageType"])
 
 ZoneProperties = build_java_class_mimic(
+    "ZoneProperties",
     ["MessageType", "Name", "Number", "ZoneType", "Area", "Options"])
 
 UnitProperties = build_java_class_mimic(
+    "UnitProperties",
     ["MessageType", "Name", "Number", "UnitType"])
 
-EndOfData = build_java_class_mimic(
-    ["MessageType"])
+EndOfData = build_java_class_mimic("EndOfData", ["MessageType"])
 
 ObjectStatus = build_java_class_mimic(
+    "ObjectStatus",
     ["StatusType", "Statuses"])
 
 ZoneStatus = build_java_class_mimic(
+    "ZoneStatus",
     ["Number", "Status", "Loop"])
 
 UnitStatus = build_java_class_mimic(
+    "UnitStatus",
     ["Number", "Status", "Time"])
 
 SecurityCodeValidation = build_java_class_mimic(
+    "SecurityCodeValidation",
     ["CodeNumber", "AuthorityLevel"])
 
 OtherEventNotifications = build_java_class_mimic(
+    "OtherEventNotifications",
     ["Notifications"])
 
-mimic = build_java_class_mimic(
-    ["MessageType", "EventNumber", "TimeDataValid", "Month", "Day", "Hour",
-     "Minute", "EventType", "Parameter1", "Parameter2"])
-mimic.isTimeDataValid = mimic.getTimeDataValid
-EventLogData = mimic
+EventLogData = build_java_class_mimic(
+    "EventLogData",
+    ["MessageType", "EventNumber", "Month", "Day", "Hour",
+     "Minute", "EventType", "Parameter1", "Parameter2"],
+    ["TimeDataValid"])

@@ -68,6 +68,22 @@ class PluginExtension(object):
             those callbacks will be the extension instance, not the plugin
             instance. Complaints will be made to the error log if two
             extensions try to add methods with the same name.
+        reports -- This should be set to a dictionary. Keys should be selected
+            from the following list, and values should be methods with the
+            following signature:
+
+            def report_func(report_name, connection, say)
+
+            where connection is a Connection object and say is a method to use
+            for output. Report methods should print information from the
+            controller in a tidy format, and throw exceptions if they
+            encounter communication problems.
+            Possible report topics:
+
+                "System Information", "System Troubles", "System Features",
+                "System Capacities", "Zones", "Areas", "Units", "Buttons",
+                "Codes", "Thermostats", "Sensors", "Messages", "Audio Zones",
+                "Audio Sources", "Event Log"
 
     Methods stubbed in the base class that subclasses may implement:
         getDeviceList
@@ -125,6 +141,7 @@ class PluginExtension(object):
     # ----- Things that subclasses should set up in __init__ -----#
     type_ids = None
     callbacks = None
+    reports = None
 
     def getDeviceList(self, props, dev_ids):
         """ this is called when the plugin needs to know what functionality

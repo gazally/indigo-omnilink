@@ -4,6 +4,7 @@
   <Name>Write information on connected OMNI Controllers to Log</Name>
   <CallbackMethod>writeControllerInfoToLog</CallbackMethod>
 </MenuItem>
+<MenuItem id="sep"/>
 <MenuItem id="toggleDebugging">
   <Name>Toggle Debugging</Name>
   <CallbackMethod>toggleDebugging</CallbackMethod>

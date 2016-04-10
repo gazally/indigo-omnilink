@@ -635,3 +635,115 @@ class Plugin(indigo.PluginBase):
             return getattr(indigo.PluginBase, name)(self, *args)
         else:
             return None
+
+    # ----- Menu Item Callbacks ----- #
+
+    def writeControllerInfoToLog(self):
+        """ Callback for the "Write information on connected OMNI Controllers
+        to Log" menu item.
+        """
+        for c in self.connections.values():
+            if not c.is_connected():
+                msg = "OMNI Controller at {0} is not connected ".format(c.ip)
+                if c.javaproc is None:
+                    msg = msg + ("because the Java subprocess could not be "
+                                 "started.")
+                elif c.gateway is None:
+                    msg = msg + ("because the gateway between Python and Java "
+                                 "could not be started.")
+                else:
+                    msg = msg + ("because it did not respond, or because the "
+                                 "IP address, port or encryption keys are "
+                                 "not correct.")
+                self.say(msg, title=True)
+            else:
+                self.say_everything_we_know_about(c)
+
+    def say_everything_we_know_about(self, c):
+        self.say("HAI/Omni Controller at {0}:{1}".format(c.ip, c.port),
+                 title=True)
+        reports = ["System Information",
+                   "System Troubles",
+                   "System Features",
+                   "System Capacities",
+                   "Zones",
+                   "Areas",
+                   "Control Units",
+                   "Buttons",
+                   "Codes",
+                   "Thermostats",
+                   "Sensors",
+                   "Messages",
+                   "Audio Zones",
+                   "Audio Sources",
+                   "Event Log"]
+
+        for report in reports:
+            self.say(report + ":", header=True)
+            report_func = self.get_report_implementation(report)
+            try:
+                report_func(report, c, self.say)
+            except (Py4JError, ConnectionError):
+                pass
+
+    def get_report_implementation(self, report):
+        def not_implemented(report, c, say):
+            say("Not Implemented")
+
+        for ext in self.extensions:
+            if report in ext.reports:
+                return ext.reports[report]
+        if report in self.standard_queries.keys():
+            return self.query_and_print
+
+        return not_implemented
+
+    standard_queries = {
+        "Zones": ("OBJ_TYPE_ZONE", "NAMED", "AREA_ALL", "ANY_LOAD"),
+        "Areas": ("OBJ_TYPE_AREA", "NAMED_UNNAMED", "NONE", "NONE"),
+        "Control Units": ("OBJ_TYPE_UNIT", "NAMED", "AREA_ALL", "ANY_LOAD"),
+        "Buttons": ("OBJ_TYPE_BUTTON", "NAMED", "AREA_ALL", "NONE"),
+        "Codes": ("OBJ_TYPE_CODE", "NAMED", "AREA_ALL", "NONE"),
+        "Thermostats": ("OBJ_TYPE_THERMO", "NAMED", "AREA_ALL", "NONE"),
+        "Sensors": ("OBJ_TYPE_AUX_SENSOR", "NAMED", "AREA_ALL", "NONE"),
+        "Messages": ("OBJ_TYPE_MESG", "NAMED", "AREA_ALL", "NONE"),
+        "Audio Zones": ("OBJ_TYPE_AUDIO_ZONE", "NAMED", "AREA_ALL", "NONE"),
+        "Audio Sources": ("OBJ_TYPE_AUDIO_SOURCE", "NAMED", "AREA_ALL", "NONE")
+        }
+
+    def query_and_print(self, report, connection, say):
+        """ Print whatever jomnilinkII will give us about an object type """
+        objname, f1name, f2name, f3name = self.standard_queries[report]
+
+        M = connection.jomnilinkII.Message
+        OP = connection.jomnilinkII.MessageTypes.ObjectProperties
+        omni = connection.omni
+
+        mtype = M.MESG_TYPE_OBJ_PROP
+        objtype = getattr(M, objname)
+        filter1 = getattr(OP, "FILTER_1_" + f1name)
+        filter2 = getattr(OP, "FILTER_2_" + f2name)
+        filter3 = getattr(OP, "FILTER_3_" + f3name)
+
+        objnum = 0
+        while True:
+            m = omni.reqObjectProperties(objtype, objnum, 1, filter1, filter2,
+                                         filter3)
+            if m.getMessageType() != mtype:
+                break
+            self.say(m.toString())
+            objnum = m.getNumber()
+            try:
+                status = omni.reqObjectStatus(objtype, objnum, objnum)
+                statuses = status.getStatuses()
+                for s in statuses:
+                    say(s.toString())
+            except (Py4JError, ConnectionError):
+                pass
+
+    def say(self, *args, **kwargs):
+        header = kwargs.pop("header", False)
+        title = kwargs.pop("title", False)
+        indent = 0 if title else 4 if header else 8
+        indigo.server.log(" " * indent +
+                          " ".join([unicode(arg) for arg in args]))

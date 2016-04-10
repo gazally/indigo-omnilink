@@ -19,7 +19,7 @@
 """ Omni Plugin extension for Controller Devices """
 from __future__ import unicode_literals
 from collections import namedtuple, defaultdict
-import datetime
+from datetime import time, datetime
 from distutils.version import StrictVersion
 import logging
 
@@ -62,13 +62,18 @@ class ControllerExtension(extensions.PluginExtension):
         self.triggers = {}
 
         self.callbacks = {
-            "writeControllerInfoToLog": self.writeControllerInfoToLog,
             "checkSecurityCode": self.checkSecurityCode,
             "generateConsoleList": self.generateConsoleList,
             "enableConsoleBeeper": self.enableDisableConsoleBeeper,
             "disableConsoleBeeper": self.enableDisableConsoleBeeper,
             "sendBeepCommand": self.sendBeepCommand
         }
+
+        self.reports = {"System Information": self.say_system_information,
+                        "System Troubles": self.say_system_troubles,
+                        "System Capacities": self.say_system_capacities,
+                        "Event Log": self.say_event_log}
+
         self.controller_info = {}
 
     # ----- Device Start and Stop Methods ----- #
@@ -161,7 +166,8 @@ class ControllerExtension(extensions.PluginExtension):
     models = {30: "HAI Omni IIe",
               16: "HAI OmniPro II",
               36: "HAI Lumina",
-              37: "HAI Lumina Pro"}
+              37: "HAI Lumina Pro",
+              38: "HAI Omni LTe"}
 
     trouble_names = ["freezeTrouble", "batteryLowTrouble", "ACPowerTrouble",
                      "phoneLineTrouble", "digitalCommunicatorTrouble",
@@ -174,6 +180,19 @@ class ControllerExtension(extensions.PluginExtension):
         jomnilinkII.
         """
         info = connection.omni.reqSystemInformation()
+        model, firmware = self.decode_system_info(info)
+
+        status = connection.omni.reqSystemStatus()
+        battery_reading = status.getBatteryReading()
+
+        troubles = connection.omni.reqSystemTroubles()
+        trouble_states = self.decode_troubles(troubles)
+
+        return namedtuple(
+            "Info", ["model", "firmware", "battery_reading", "troubles"])(
+                model, firmware, battery_reading, trouble_states)
+
+    def decode_system_info(self, info):
         model = self.models.get(info.getModel(), "Unknown")
         major = info.getMajor()
         minor = info.getMinor()
@@ -188,20 +207,15 @@ class ControllerExtension(extensions.PluginExtension):
             # prototype revisions X1, X2 etc.
             revision = "X" + str(256 - revision_number)
         firmware = "{0}.{1}{2}".format(major, minor, revision)
+        return model, firmware
 
-        status = connection.omni.reqSystemStatus()
-        battery_reading = status.getBatteryReading()
-
-        troubles = connection.omni.reqSystemTroubles()
+    def decode_troubles(self, troubles):
         trouble_states = {}
         for t in self.trouble_names:
             trouble_states[t] = False
         for t in troubles.getTroubles():
             trouble_states[self.trouble_names[t - 1]] = True
-
-        return namedtuple(
-            "Info", ["model", "firmware", "battery_reading", "troubles"])(
-                model, firmware, battery_reading, trouble_states)
+        return trouble_states
 
     # ----- Device creation ----- #
 
@@ -274,11 +288,12 @@ class ControllerExtension(extensions.PluginExtension):
         try:
             notifications = other_event_msg.getNotifications()
             for n in notifications:
+                log.debug("Notification code: " + hex(n))
                 if n & self.notification_mask == self.notification_value:
                     event_num = n & self.event_mask
                     if event_num in self.event_types:
                         event_type = self.event_types[event_num]
-                        log.debug("Received {0} event for device {1}".format(
+                        log.debug("Processing {0} event for device {1}".format(
                             event_type, dev.id))
                         for t in self.triggers[dev.id][event_type]:
                             indigo.trigger.execute(t)
@@ -528,165 +543,90 @@ class ControllerExtension(extensions.PluginExtension):
                           action.props["consoleNumber"],
                           action.props["beepCommand"]))
 
-    # ----- Menu Item Callbacks ----- #
+    # ----- Write Info on connected controllers to log ----- #
 
-    def writeControllerInfoToLog(self):
-        """ Callback for the "Write information on connected OMNI Controllers
-        to Log" menu item.
-        """
-        for c in self.plugin.connections.values():
-            if not c.is_connected():
-                msg = "OMNI Controller at {0} is not connected ".format(c.ip)
-                if c.javaproc is None:
-                    msg = msg + ("because the Java subprocess could not be "
-                                 "started.")
-                elif c.gateway is None:
-                    msg = msg + ("because the gateway between Python and Java "
-                                 "could not be started.")
-                else:
-                    msg = msg + ("because it did not respond, or because the "
-                                 "IP address, port or encryption keys are "
-                                 "not correct.")
-                self.log(msg, title=True)
-            else:
-                try:
-                    self.log_everything_we_know_about(c)
-                except (ConnectionError, Py4JError):
-                    log.error("Error communicating with Omni system")
-                    log.debug("", exc_info=True)
+    def say_system_information(self, r, connection, say):
+        omni = connection.omni
+        info = omni.reqSystemInformation()
+        model, firmware = self.decode_system_info(info)
+        say("Model:", model)
+        say("Firmware version:", firmware)
+        say("Phone number:", info.getPhone())
 
-    def log_everything_we_know_about(self, c):
-        self.log("Omni Controller at {0}:".format(c.ip), title=True)
-        M = c.jomnilinkII.Message
-        OP = c.jomnilinkII.MessageTypes.ObjectProperties
-        omni = c.omni
+        status = omni.reqSystemStatus()
+        self.say_system_time(status, say)
+        say("Battery reading:", status.getBatteryReading())
+        if status.getAlarms():
+            areas = ", ".join((str(key) for key in status.getAlarms().keys()))
+        else:
+            areas = "None"
+        say("Areas in alarm:", areas)
 
-        self.log("System Information:", header=True)
-        self.log(omni.reqSystemInformation().toString())
-        self.log(omni.reqSystemStatus().toString())
-        self.log(omni.reqSystemFormats().toString())
+        formats = omni.reqSystemFormats()
 
-        st = omni.reqSystemTroubles().getTroubles()
-        self.log("System Troubles:", header=True)
-        self.log(*st if st else ["None"])
-        sf = omni.reqSystemFeatures().getFeatures()
-        self.log("System Features:", header=True)
-        self.log(*sf if sf else ["None"])
+        say("Temperature Format:",
+            "F" if formats.getTempFormat() == 1 else "C")
+        say("Time Format:",
+            "12 hour" if formats.getTimeformat() == 1 else "24 hour")
+        say("Date Format:",
+            "MMDD" if formats.getDateFormat() == 1 else "DDMM")
 
-        self.log("System Capacities:", header=True)
-        self.log(
-            "Max zones:",
+    def say_system_time(self, status, say):
+        if not status.isTimeDateValid():
+            say("System Time: not set")
+        else:
+            dt = datetime(2000 + status.getYear(),  # year 2100 bug
+                          status.getMonth(),
+                          status.getDay(),
+                          status.getHour(),
+                          status.getMinute(),
+                          status.getSecond())
+            say("System Date:", dt.strftime("%x"))
+            say("System Time:", dt.strftime("%X"))
+            say("Daylight Savings:", status.isDaylightSavings())
+            say("Day of week:", status.getDayOfWeek())
+            say("Sunrise:", time(status.getSunriseHour(),
+                                 status.getSunriseMinute()).strftime("%X"))
+            say("Sunset:", time(status.getSunsetHour(),
+                                status.getSunsetMinute()).strftime("%X"))
+
+    def say_system_troubles(self, r, connection, say):
+        omni = connection.omni
+        system_troubles = omni.reqSystemTroubles()
+        trouble_states = self.decode_troubles(system_troubles)
+        troubles = [k for k, v in trouble_states.items() if v]
+        say(*troubles if troubles else ["None"])
+
+    def say_system_capacities(self, r, connection, say):
+        omni = connection.omni
+        M = connection.jomnilinkII.Message
+
+        say("Max zones:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_ZONE).getCapacity())
-
-        self.log(
-            "Max units:",
+        say("Max units:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_UNIT).getCapacity())
-
-        self.log(
-            "Max areas:",
+        say("Max areas:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_AREA).getCapacity())
-
-        self.log(
-            "Max buttons:",
+        say("Max buttons:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_BUTTON).getCapacity())
-
-        self.log(
-            "Max codes:",
+        say("Max codes:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_CODE).getCapacity())
-
-        self.log(
-            "Max thermostats:",
+        say("Max thermostats:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_THERMO).getCapacity())
+        say("Max messages:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_MESG).getCapacity())
+        say("Max audio zones:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_AUDIO_ZONE).getCapacity())
+        say("Max audio sources:",
+            omni.reqObjectTypeCapacities(
+                M.OBJ_TYPE_AUDIO_SOURCE).getCapacity())
 
-        max_messages = omni.reqObjectTypeCapacities(
-            M.OBJ_TYPE_MESG).getCapacity()
-        self.log("Max messages:", max_messages)
+    def say_event_log(self, r, connection, say):
+        omni = connection.omni
+        M = connection.jomnilinkII.Message
+        self.say_event_log_entries(omni, M, 20, say)
 
-        max_audio_zones = omni.reqObjectTypeCapacities(
-            M.OBJ_TYPE_AUDIO_ZONE).getCapacity()
-        self.log("Max audio zones:", max_audio_zones)
-
-        max_audio_sources = omni.reqObjectTypeCapacities(
-            M.OBJ_TYPE_AUDIO_SOURCE).getCapacity()
-        self.log("Max audio sources:", max_audio_sources)
-
-        self.log("System Objects:", header=True)
-        self.query_and_print(omni, M.OBJ_TYPE_ZONE, M.MESG_TYPE_OBJ_PROP,
-                             OP.FILTER_1_NAMED,
-                             OP.FILTER_2_AREA_ALL,
-                             OP.FILTER_3_ANY_LOAD)
-
-        self.query_and_print(omni, M.OBJ_TYPE_AREA, M.MESG_TYPE_OBJ_PROP,
-                             OP.FILTER_1_NAMED_UNAMED,
-                             OP.FILTER_2_NONE,
-                             OP.FILTER_3_NONE)
-
-        self.query_and_print(omni, M.OBJ_TYPE_UNIT, M.MESG_TYPE_OBJ_PROP,
-                             OP.FILTER_1_NAMED,
-                             OP.FILTER_2_AREA_ALL,
-                             OP.FILTER_3_ANY_LOAD)
-
-        self.query_and_print(omni, M.OBJ_TYPE_BUTTON, M.MESG_TYPE_OBJ_PROP,
-                             OP.FILTER_1_NAMED,
-                             OP.FILTER_2_AREA_ALL,
-                             OP.FILTER_3_NONE)
-
-        self.query_and_print(omni, M.OBJ_TYPE_CODE, M.MESG_TYPE_OBJ_PROP,
-                             OP.FILTER_1_NAMED,
-                             OP.FILTER_2_AREA_ALL,
-                             OP.FILTER_3_NONE)
-
-        self.query_and_print(omni, M.OBJ_TYPE_THERMO, M.MESG_TYPE_OBJ_PROP,
-                             OP.FILTER_1_NAMED,
-                             OP.FILTER_2_AREA_ALL,
-                             OP.FILTER_3_NONE)
-
-        self.query_and_print(omni, M.OBJ_TYPE_AUX_SENSOR, M.MESG_TYPE_OBJ_PROP,
-                             OP.FILTER_1_NAMED,
-                             OP.FILTER_2_AREA_ALL,
-                             OP.FILTER_3_NONE)
-
-        self.query_and_print(omni, M.OBJ_TYPE_MESG, M.MESG_TYPE_OBJ_PROP,
-                             OP.FILTER_1_NAMED,
-                             OP.FILTER_2_AREA_ALL,
-                             OP.FILTER_3_NONE)
-
-        status = omni.reqObjectStatus(M.OBJ_TYPE_AUDIO_ZONE, 1,
-                                      max_audio_zones)
-        statuses = status.getStatuses()
-        for s in statuses:
-            self.log(s.toString())
-
-        for as_index in range(1, max_audio_sources):
-            pos = 0
-            while True:
-                m = omni.reqAudioSourceStatus(as_index, pos)
-                if m.getMessageType() != M.MESG_TYPE_AUDIO_SOURCE_STATUS:
-                    break
-                self.log(m.toString())
-                pos = m.getPosition()
-
-        self.log("Event Log:", header=True)
-        self.log_event_log_entries(omni, M, 255)
-
-        self.log("System Names:", header=True)
-        self.log(omni.uploadNames(M.OBJ_TYPE_UNIT, 0).toString())
-
-    def query_and_print(self, omni, objtype, mtype, filter1, filter2, filter3):
-        objnum = 0
-        while True:
-            m = omni.reqObjectProperties(objtype, objnum, 1, filter1, filter2,
-                                         filter3)
-            if m.getMessageType() != mtype:
-                break
-            self.log(m.toString())
-            objnum = m.getNumber()
-            status = omni.reqObjectStatus(objtype, objnum, objnum)
-            statuses = status.getStatuses()
-            for s in statuses:
-                self.log(s.toString())
-
-    def log_event_log_entries(self, omni, M, limit):
+    def say_event_log_entries(self, omni, M, limit, say):
         num = 0
         count = 0
         while True:
@@ -694,19 +634,19 @@ class ControllerExtension(extensions.PluginExtension):
             if (m.getMessageType() != M.MESG_TYPE_EVENT_LOG_DATA or
                     count > limit):
                 break
-            self.log_event_log_entry(m)
+            self.say_event_log_entry(m, say)
             num = m.getEventNumber()
             count += 1
 
-    def log_event_log_entry(self, m):
+    def say_event_log_entry(self, m, say):
         time_format = "%b %d %X   "
         if m.isTimeDataValid():
-            time = datetime.datetime(
+            time = datetime(
                 # the 2016 is not printed (but it is a leap year)
                 2016, m.getMonth(), m.getDay(), m.getHour(),
                 m.getMinute()).strftime(time_format)
         else:
-            width = len(datetime.datetime.now().strftime(time_format))
+            width = len(datetime.now().strftime(time_format))
             time = "{{0:<{0}}}".format(width).format("Unknown")
 
         event, pn1, pn2 = self.events.get(m.getEventType(),
@@ -722,7 +662,7 @@ class ControllerExtension(extensions.PluginExtension):
 
         params = ["{0}: {1}".format(pn, p) for pn, p in tups]
         params = "".join(["{0:<20}".format(p) for p in params])
-        self.log(time + event + params)
+        say(time + event + params)
 
     events = {
         4: ("Bypass", "User", "Zone"),
@@ -780,10 +720,3 @@ class ControllerExtension(extensions.PluginExtension):
         elif pname == "Type":
             return self.alarm_types.get(p, "Unknown")
         return p
-
-    def log(self, *args, **kwargs):
-        header = kwargs.pop("header", False)
-        title = kwargs.pop("title", False)
-        indent = 0 if title else 4 if header else 8
-        indigo.server.log(" " * indent +
-                          " ".join([unicode(arg) for arg in args]))

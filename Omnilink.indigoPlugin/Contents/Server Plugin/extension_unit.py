@@ -36,20 +36,20 @@ _VERSION = "0.1.0"
 class ControlUnitExtension(extensions.PluginExtension):
     """Omni plugin extension for Control Units """
     device_types = {
-        1: ("omniStandardX10Unit", "Standard X10 Control"),
-        2: ("omniExtendedX10Unit", "Extended X10 Control"),
-        3: ("omniComposeX10Unit", "Compose X10 Control"),
-        4: ("omniUPBUnit", "UPB Control"),
-        5: ("omniHLCRoomUnit", "HLC Room Control"),
-        6: ("omniHLCLoadUnit", "HLC Load Control"),
-        7: ("omniLuminaModeUnit", "Lumina Mode Control"),
-        8: ("omniRadioRAUnit", "Radio RA Control"),
-        9: ("omniCentraLiteUnit", "CentraLite Control"),
+        1: ("omniStandardX10Unit",  "Standard X10 Control"),
+        2: ("omniExtendedX10Unit",  "Extended X10 Control"),
+        3: ("omniComposeX10Unit",   "Compose X10 Control"),
+        4: ("omniUPBUnit",          "UPB Control"),
+        5: ("omniHLCRoomUnit",      "HLC Room Control"),
+        6: ("omniHLCLoadUnit",      "HLC Load Control"),
+        7: ("omniLuminaModeUnit",   "Lumina Mode Control"),
+        8: ("omniRadioRAUnit",      "Radio RA Control"),
+        9: ("omniCentraLiteUnit",   "CentraLite Control"),
         10: ("omniViziaRFRoomUnit", "Vizia RF Room Control"),
         11: ("omniViziaRFLoadUnit", "Vizia RF Load Control"),
-        12: ("omniFlagUnit", "Omni Controller Flag"),
-        13: ("omniVoltageUnit", "Voltage Output Control"),
-        14: ("omniAudioZoneUnit", "Audio Zone Control"),
+        12: ("omniFlagUnit",        "Omni Controller Flag"),
+        13: ("omniVoltageUnit",     "Voltage Output Control"),
+        14: ("omniAudioZoneUnit",   "Audio Zone Control"),
         15: ("omniAudioSourceUnit", "Audio Source Control"),
     }
     relay_device_types = ["omniFlagUnit", "omniVoltageUnit",
@@ -61,6 +61,7 @@ class ControlUnitExtension(extensions.PluginExtension):
         self.type_ids["device"] = [devtype for devtype, name
                                    in self.device_types.values()]
         self.callbacks = {}
+        self.reports = {"Control Units": self.say_unit_info}
 
         # key is device type, list contains device id's
         self.device_ids = defaultdict(list)
@@ -273,6 +274,13 @@ class ControlUnitExtension(extensions.PluginExtension):
                 self.plugin.make_connection(props))
         return self._unit_info[key]
 
+    # ----- Write info on units to log ----- #
+
+    def say_unit_info(self, report, connection, say):
+        unit_info = self.unit_info(self.plugin.props_from_connection(
+            connection))
+        unit_info.report(say)
+
 
 class UnitInfo(object):
     """ Get the unit info from the Omni device, and assist
@@ -285,6 +293,7 @@ class UnitInfo(object):
         fetch_status: query Omni for unit status for a unit
         fetch_props: return a UnitProperties object for one unit
         send_command: send a command
+        report: given a print method, write formatted info about all units
     """
 
     def __init__(self, connection):
@@ -368,6 +377,38 @@ class UnitInfo(object):
         cmd = getattr(self.connection.jomnilinkII.MessageTypes.CommandMessage,
                       cmd_name)
         self.connection.omni.controllerCommand(cmd, unit_num, parameter)
+
+    def report(self, say):
+        items = sorted(self.unit_props.items())
+        if not items:
+            say("None")
+            return
+        widths = [("Num", 3),
+                  ("Name", 12),
+                  ("Type", 22),
+                  ("Time (seconds)", 14),
+                  ("Status", 6)]
+
+        fmt = "  ".join(("{{{0}: <{1}}}".format(i, w[1]) for i, w in
+                         enumerate(widths)))
+        say(fmt.format(*(n for n, w in widths)))
+        for num, up in items:
+            us = self.fetch_status(num)
+            if us.status == 0:
+                status = "Off"
+            elif us.status == 1:
+                status = "On"
+            elif 2 <= us.status <= 13:
+                status = "Scene " + chr(ord('A') + us.status - 2)
+            elif 17 <= us.status <= 25:
+                status = "Dim by " + str(us.status - 16)
+            elif 33 <= us.status <= 41:
+                status = "Brighten by " + str(us.status - 32)
+            elif 100 <= us.status <= 200:
+                status = str(us.status - 100) + "%"
+            else:
+                status = str(status)
+            say(fmt.format(num, up.name, up.type_name, us.time, status))
 
 
 class UnitProperties(object):

@@ -46,6 +46,7 @@ class ZoneExtension(extensions.PluginExtension):
         self.device_ids = []
         self._zone_info = {}
         self.callbacks = {}
+        self.reports = {"Zones": self.say_zone_info}
 
     # ----- Device Start and Stop Methods ----- #
 
@@ -244,6 +245,13 @@ class ZoneExtension(extensions.PluginExtension):
                 self.plugin.make_connection(props))
         return self._zone_info[key]
 
+    # ----- Write info on zones to log ----- #
+
+    def say_zone_info(self, report, connection, say):
+        zone_info = self.zone_info(
+            self.plugin.props_from_connection(connection))
+        zone_info.report(say)
+
 
 class ZoneInfo(object):
     """ Get the zone info from the Omni device, and assist
@@ -254,6 +262,7 @@ class ZoneInfo(object):
             object deciphered from Omni event notification method
         fetch_status: query Omni for zone status for a zone
         fetch_props: return a ZoneProperties object for one zone
+        report: given a print method, write formatted info about all zones
     """
 
     def __init__(self, connection):
@@ -328,6 +337,41 @@ class ZoneInfo(object):
 
         return objnum, ZoneStatus(status)
 
+    def report(self, say):
+        items = sorted(self.zone_props.items())
+        if not items:
+            say("None")
+            return
+        widths = [("Num", 3),
+                  ("Name", 15),
+                  ("Type", 27),
+                  ("Area", 4),
+                  ("Options", 9),
+                  ("Loop", 4),
+                  ("Condition", 9),
+                  ("Latched", 7),
+                  ("Arming", 13),
+                  ("Trouble", 11)]
+
+        fmt = "  ".join(("{{{0}: <{1}}}".format(i, w[1]) for i, w in
+                         enumerate(widths)))
+        say(fmt.format(*(n for n, w in widths)))
+        for num, zp in items:
+            options = "CZ " if zp.cross_zoning else ""
+            if zp.swinger_shutdown:
+                options = options + "SS "
+            if zp.dial_out_delay:
+                options = options + "DOD"
+
+            zs = self.fetch_status(num)
+            trouble = "Had Trouble" if zs.had_trouble else "None"
+
+            say(fmt.format(num, zp.name, zp.type_name, zp.area, options,
+                           zs.loop, zs.condition, zs.latched_alarm, zs.arming,
+                           trouble))
+        say("Abbreviations: CZ: Cross Zoning, SS: Swinger Shutdown, "
+            "DOD: Dial out Delay")
+
 
 class ZoneProperties(object):
     """ ZoneProperties class, represents Omni zone properties """
@@ -371,14 +415,14 @@ class ZoneProperties(object):
                   56: "Fire Tamper",
                   64: "Auxiliary",
                   65: "Keyswitch Input",
-                  80: "Programmable Energy Saver Module",
+                  80: "Program Energy Saver Module",
                   81: "Outdoor Temperature",
                   82: "Temperature",
                   83: "Temperature Alarm",
                   84: "Humidity",
-                  85: "Extended Range Outdoor Temperature",
-                  85: "Extended Range Temperature",
-                  85: "Extended Range Temperature Alarm"
+                  85: "Extended Range Outdoor Temp",
+                  85: "Extended Range Temp",
+                  85: "Extended Range Temp Alarm"
                   }
 
 
@@ -412,8 +456,8 @@ class ZoneStatus(object):
 
     armings = {0b000000: "Disarmed",
                0b010000: "Armed",
-               0b100000: "Bypassed by User",
-               0b110000: "Bypassed by System"}
+               0b100000: "User Bypass",
+               0b110000: "System Bypass"}
     arming_mask = 0b110000
 
     trouble_mask = 0b1000000

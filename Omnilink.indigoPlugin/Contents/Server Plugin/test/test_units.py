@@ -202,3 +202,27 @@ def test_action_command_dimmer_relay_sends_commands(
         plugin.actionControlDimmerRelay(action, dev)
 
     assert omni1.controllerCommand.call_count == len(actions)
+
+
+def test_action_request_status_succeeds(
+        plugin, indigo, omni1, unit_devices):
+    dev = indigo.devices["test Radio RA"]
+    plugin.deviceStartComm(dev)
+
+    action = Mock()
+    action.deviceAction = indigo.kDeviceGeneralAction.RequestStatus
+    plugin.actionControlGeneral(action, dev)
+
+
+def test_action_request_logs_network_error(
+        plugin, indigo, py4j, omni1, unit_devices):
+    dev = indigo.devices["test X10 Unit"]
+    plugin.deviceStartComm(dev)
+
+    action = Mock()
+    action.deviceAction = indigo.kDimmerRelayAction.Toggle
+    omni1.controllerCommand.side_effect = py4j.protocol.Py4JError
+
+    plugin.actionControlDimmerRelay(action, dev)
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
