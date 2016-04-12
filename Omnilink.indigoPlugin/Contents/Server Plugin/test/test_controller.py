@@ -27,17 +27,18 @@ from fixtures.omni import omni2_system_messages_asserts
 
 
 @pytest.fixture
-def controller_device(indigo, plugin, device_factory_fields):
+def controller_device(indigo, plugin, device_factory_fields,
+                      device_connection_props):
     values = plugin.makeConnection(device_factory_fields, [])
     values["deviceGroupList"] = ["omniControllerDevice"]
     plugin.createDevices(
         values,
         [dev.id for dev in indigo.devices.iter()
-         if dev.pluginProps["ipAddress"] == values["ipAddress"]])
+         if dev.pluginProps["url"] == device_connection_props["url"]])
 
     dev = [dev for dev in indigo.devices.iter()
            if (dev.deviceTypeId == "omniControllerDevice" and
-               dev.pluginProps["ipAddress"] == values["ipAddress"])]
+               dev.pluginProps["url"] == device_connection_props["url"])]
     assert len(dev) == 1
     return dev[0]
 
@@ -51,17 +52,18 @@ def started_controller_device(plugin, controller_device):
 @pytest.fixture
 def second_controller_device(indigo, plugin,
                              device_factory_fields_2,
+                             device_connection_props_2,
                              controller_device):
     values = plugin.makeConnection(device_factory_fields_2, [])
     values["deviceGroupList"] = ["omniControllerDevice"]
     plugin.createDevices(
         values,
         [dev.id for dev in indigo.devices.iter()
-         if dev.pluginProps["ipAddress"] == values["ipAddress"]])
+         if dev.pluginProps["url"] == device_connection_props_2["url"]])
 
     dev = [dev for dev in indigo.devices.iter()
            if (dev.deviceTypeId == "omniControllerDevice" and
-               dev.pluginProps["ipAddress"] == values["ipAddress"])]
+               dev.pluginProps["url"] == device_connection_props_2["url"])]
     assert len(dev) == 1
     return dev[0]
 

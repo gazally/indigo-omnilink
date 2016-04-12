@@ -1,12 +1,14 @@
 [run]
 include = plugin.py
 	  connection.py
+	  keychain.py
 	  extension_*.py
           test/test_*.py
 
 [report]
 include = plugin.py
 	  connection.py
+	  keychain.py
 	  extension_*.py
           test/test_*.py
 

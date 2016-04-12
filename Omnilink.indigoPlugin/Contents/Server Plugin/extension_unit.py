@@ -66,6 +66,7 @@ class ControlUnitExtension(extensions.PluginExtension):
         # key is device type, list contains device id's
         self.device_ids = defaultdict(list)
 
+        # key is url, list is UnitInfo instances
         self._unit_info = {}
 
     # ----- Device Start and Stop Methods ----- #
@@ -87,14 +88,14 @@ class ControlUnitExtension(extensions.PluginExtension):
 
     # ----- Device creation methods ----- #
 
-    def getDeviceList(self, props, dev_ids):
+    def getDeviceList(self, url, dev_ids):
         """ Query the Omni controller to see if any units are defined.
         If there are, return the device types found.
         Otherwise, return an empty list.
         """
         result = []
         try:
-            unit_props = self.unit_info(props).unit_props
+            unit_props = self.unit_info(url).unit_props
             result = list(set(((up.device_type, up.type_name) for up in
                                unit_props.values())))
         except (Py4JError, ConnectionError):
@@ -112,7 +113,7 @@ class ControlUnitExtension(extensions.PluginExtension):
             if indigo.devices[id].deviceTypeId == dev_type]
         values["deviceVersion"] = _VERSION
         try:
-            for up in self.unit_info(values).unit_props.values():
+            for up in self.unit_info(values["url"]).unit_props.values():
                 if up.device_type == dev_type:
                     if not any((dev.pluginProps["number"] == up.number
                                 for dev in old_devs)):
@@ -159,7 +160,7 @@ class ControlUnitExtension(extensions.PluginExtension):
         method, text = dispatch[action.deviceAction]
         try:
             unit_num = dev.pluginProps["number"]
-            unit_info = self.unit_info(dev.pluginProps)
+            unit_info = self.unit_info(dev.pluginProps["url"])
             method(action, dev, unit_num, unit_info)
             indigo.server.log('sent "{0}" {1} request'.format(dev.name, text))
         except Py4JError, ConnectionError:
@@ -209,52 +210,43 @@ class ControlUnitExtension(extensions.PluginExtension):
             if (status_msg.getStatusType() !=
                     connection.jomnilinkII.Message.OBJ_TYPE_UNIT):
                 return
-            connection_props = self.plugin.props_from_connection(connection)
-            unit_info = self.unit_info(connection_props)
+            unit_info = self.unit_info(connection.url)
             number, status = unit_info.number_and_status_from_notification(
                 status_msg)
         except Py4JError, ConnectionError:
             log.debug("status_notification exception in Unit", exc_info=True)
         else:
-            connection_key = self.plugin.make_connection_key(connection_props)
-            for dev_ids_of_type in self.device_ids.values():
-                for dev_id in dev_ids_of_type:
-                    dev = indigo.devices[dev_id]
-                    if (self.plugin.make_connection_key(dev.pluginProps) ==
-                            connection_key and
-                            dev.pluginProps["number"] == number):
-                        self.update_device_from_status(dev, status)
+            for dev in self.devices_from_url(connection.url):
+                if dev.pluginProps["number"] == number:
+                    self.update_device_from_status(dev, status)
 
     def reconnect_notification(self, connection):
-        connection_key = self.plugin.make_connection_key(
-            self.plugin.props_from_connection(connection))
-        for dev_ids_of_type in self.device_ids.values():
-            for dev_id in dev_ids_of_type:
-                dev = indigo.devices[dev_id]
-                if (self.plugin.make_connection_key(dev.pluginProps) ==
-                        connection_key):
-                    self.update_device_status(dev)
+        for dev in self.devices_from_url(connection.url):
+            self.update_device_status(dev)
 
     def disconnect_notification(self, connection, e):
-        connection_key = self.plugin.make_connection_key(
-            self.plugin.props_from_connection(connection))
+        for dev in self.devices_from_url(connection.url):
+            dev.setErrorStateOnServer("disconnected")
+
+    def devices_from_url(self, url):
+        """ Produce an iteration of device objects matching the given url
+        by selecting from self.device_ids """
         for dev_ids_of_type in self.device_ids.values():
             for dev_id in dev_ids_of_type:
                 dev = indigo.devices[dev_id]
-                if (self.plugin.make_connection_key(dev.pluginProps) ==
-                        connection_key):
-                    dev.setErrorStateOnServer("not connected")
+                if (url == dev.pluginProps["url"]):
+                    yield dev
 
     def update_device_status(self, dev):
         unit_num = dev.pluginProps["number"]
         try:
-            unit_info = self.unit_info(dev.pluginProps)
+            unit_info = self.unit_info(dev.pluginProps["url"])
             props = unit_info.unit_props[unit_num]
             status = unit_info.fetch_status(unit_num)
         except (ConnectionError, Py4JError):
-            log.error("Failed to get status of unit {0} from Omni".format(
+            log.debug("Failed to get status of unit {0} from Omni".format(
                 unit_num))
-            dev.setErrorStateOnServer("not connected")
+            dev.setErrorStateOnServer("disconnected")
             return
 
         dev.updateStateOnServer("name", props.name)
@@ -267,18 +259,21 @@ class ControlUnitExtension(extensions.PluginExtension):
         if dev.deviceTypeId not in self.relay_device_types:
             dev.updateStateOnServer("brightnessLevel", status.status)
 
-    def unit_info(self, props):
-        key = self.plugin.make_connection_key(props)
-        if key not in self._unit_info:
-            self._unit_info[key] = UnitInfo(
-                self.plugin.make_connection(props))
-        return self._unit_info[key]
+    def unit_info(self, url):
+        """ Handles caching UnitInfo objects by url. Makes a new one if
+        we don't have it yet for that url or if the underlying connection
+        object has changed. """
+        connection = self.plugin.make_connection(url)
+        if (url not in self._unit_info or
+                self._unit_info[url].connection is not connection):
+            self._unit_info[url] = UnitInfo(connection)
+
+        return self._unit_info[url]
 
     # ----- Write info on units to log ----- #
 
     def say_unit_info(self, report, connection, say):
-        unit_info = self.unit_info(self.plugin.props_from_connection(
-            connection))
+        unit_info = self.unit_info(connection.url)
         unit_info.report(say)
 
 

@@ -25,29 +25,33 @@ from mock import Mock, MagicMock
 import fixtures.jomnilinkII as jomni_mimic
 
 
-def create_zone_devices(plugin, indigo, values):
+def create_zone_devices(plugin, indigo, values, device_connection_props):
     values = plugin.makeConnection(values, [])
     values["deviceGroupList"] = ["omniZoneDevice"]
     plugin.createDevices(
         values,
         [dev.id for dev in indigo.devices.iter()
-         if dev.pluginProps["ipAddress"] == values["ipAddress"]])
+         if dev.pluginProps["url"] == device_connection_props["url"]])
     return [dev for dev in indigo.devices.iter()
             if (dev.deviceTypeId == "omniZoneDevice" and
-                dev.pluginProps["ipAddress"] == values["ipAddress"])]
+                dev.pluginProps["url"] == device_connection_props["url"])]
 
 
 @pytest.fixture
-def zone_devices(plugin, indigo, device_factory_fields):
+def zone_devices(plugin, indigo, device_factory_fields,
+                 device_connection_props):
     """ Ask the plugin to create one batch of zone devices, return a list
     of them. """
-    return create_zone_devices(plugin, indigo, device_factory_fields)
+    return create_zone_devices(plugin, indigo, device_factory_fields,
+                               device_connection_props)
 
 
 @pytest.fixture
-def zone_devices_2(plugin, indigo, device_factory_fields_2, zone_devices):
+def zone_devices_2(plugin, indigo, device_factory_fields_2, zone_devices,
+                   device_connection_props_2):
     """ Ask the plugin to create zone devices on omni2 """
-    return create_zone_devices(plugin, indigo, device_factory_fields_2)
+    return create_zone_devices(plugin, indigo, device_factory_fields_2,
+                               device_connection_props_2)
 
 
 def test_get_device_list_returns_zone(plugin, device_factory_fields, omni1):
@@ -115,8 +119,6 @@ def test_device_start_comm_sets_error_state_on_connection_error(
 
     plugin.deviceStartComm(dev)
     assert dev.error_state is not None
-    assert plugin.errorLog.called
-    plugin.errorLog.reset_mock()
 
 
 def test_remove_devices_removes_zone_devices(plugin, indigo, zone_devices,
@@ -237,9 +239,7 @@ def test_request_status_action_logs_error_on_connection_error(
     omni1.reqObjectStatus.side_effect = py4j.protocol.Py4JError
 
     plugin.actionControlGeneral(action, dev)
-
-    assert plugin.errorLog.called
-    plugin.errorLog.reset_mock()
+    assert dev.error_state is not None
 
 
 def test_device_stop_comm_succeeds(indigo, plugin, zone_devices):

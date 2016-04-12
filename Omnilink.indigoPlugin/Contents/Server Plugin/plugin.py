@@ -26,6 +26,7 @@ import imp
 import logging
 import os
 import re
+import subprocess
 import threading
 
 import indigo
@@ -35,12 +36,12 @@ from termapp_server import start_shell_thread
 
 import connection
 from connection import Connection, ConnectionError
+from keychain import KeyChain
 import extensions
 
 _SLEEP = 0.1
 
 log = logging.getLogger(__name__)
-log_omni = logging.getLogger(__name__ + ".jomnilinkII")
 
 # TODO - Make it possible to change the ports used for Py4J
 # TODO - configure sleep time waiting for java process
@@ -58,6 +59,7 @@ class Plugin(indigo.PluginBase):
         indigo.PluginBase.__init__(self, plugin_id, display_name,
                                    version, prefs)
 
+        self.plugin_id = plugin_id
         self.debug = prefs.get("showDebugInfo", False)
         self.debug_omni = prefs.get("showJomnilinkIIDebugInfo", False)
         self.configure_logging()
@@ -66,17 +68,19 @@ class Plugin(indigo.PluginBase):
                 StrictVersion(version)):
             log.debug("Updating config version to " + version)
             prefs["configVersion"] = version
-        self.VERSION = version
+
         self.connections = {}
+        self.keychain = KeyChain(plugin_id)
 
         self.extensions = []
         self.type_ids_map = {"device": {},
                              "event": {},
                              "action": {}}
-        self.status_callbacks = []
-        self.event_callbacks = []
-        self.disconnect_callbacks = []
-        self.reconnect_callbacks = []
+
+        self.notifications = {"status": [],
+                              "event": [],
+                              "disconnect": [],
+                              "reconnect": []}
 
         self.load_extensions()
 
@@ -103,6 +107,8 @@ class Plugin(indigo.PluginBase):
                 self.sleep(_SLEEP)  # seconds
         except self.StopThread:
             log.debug("Concurrent thread stopping")
+
+    # ----- This plugin has its own plugins ----- #
 
     def load_extensions(self):
         """ Look in the current directory (which Indigo sets to the
@@ -140,77 +146,76 @@ class Plugin(indigo.PluginBase):
 
         See extensions.py for details.
         """
-        extension = cls()
-        self.extensions.append(extension)
-        for name, func in extension.callbacks.items():
+        ext = cls()
+        self.extensions.append(ext)
+        for name, func in ext.callbacks.items():
             if hasattr(self, name):
                 log.error("Extension {0} redefined {1}".format(cls.__name__,
                                                                name))
             setattr(self, name, func)
 
-        if extension.type_ids is not None:
-            for thing, type_ids in extension.type_ids.items():
+        if ext.type_ids is not None:
+            for thing, type_ids in ext.type_ids.items():
                 for type_id in type_ids:
-                    self.type_ids_map[thing][type_id] = extension
+                    self.type_ids_map[thing][type_id] = ext
 
-        self.status_callbacks.append(extension.status_notification)
-        self.event_callbacks.append(extension.event_notification)
-        self.disconnect_callbacks.append(extension.disconnect_notification)
-        self.reconnect_callbacks.append(extension.reconnect_notification)
+        self.notifications["status"].append(ext.status_notification)
+        self.notifications["event"].append(ext.event_notification)
+        self.notifications["disconnect"].append(ext.disconnect_notification)
+        self.notifications["reconnect"].append(ext.reconnect_notification)
 
     # ----- Management of Connection objects ----- #
 
-    def make_connection(self, params):
-        """ Create a Connection object, and cache it in self.connections
-        which is a dictionary of Connection objects indexed by the
-        concatenation of the ip, port (as a string) and encoding.
+    def make_connection(self, url, encKey1="", encKey2=""):
 
-        params - a dictionary containing the keys "ipAddress", "portNumber",
-            "encryptionKey1" and "encryptionKey2"
+        """ Create a Connection object, and cache it in self.connections
+        which is a dictionary of Connection objects indexed by ip:port
+
+        params - a dictionary containing the keys "ipAddress", "portNumber".
+            If "encryptionKey1" and "encryptionKey2" are present, they
+            will be used, otherwise the encryption keys will be fetched
+            from the keychain.
 
         This will always return a Connection object, no exceptions.
         """
-        key = self.make_connection_key(params)
-        if self.is_connected(params):
-            return self.connections[key]
+        ip, port = self.split_url(url)
 
-        ip = params["ipAddress"]
-        port = int(params["portNumber"])
-        encoding = (params["encryptionKey1"] + "-" +
-                    params["encryptionKey2"])
+        if not encKey1:
+            encKey1, encKey2 = self.keychain.get_keys(ip, port)
+        if encKey1:
+            encoding = encKey1 + "-" + encKey2
+        else:
+            encoding = ""
 
-        c = Connection(ip, port, encoding,
-                       status_callbacks=self.status_callbacks,
-                       event_callbacks=self.event_callbacks,
-                       disconnect_callbacks=self.disconnect_callbacks,
-                       reconnect_callbacks=self.reconnect_callbacks)
-        self.connections[key] = c
+        if (url in self.connections and
+                self.connections[url].encoding == encoding):
+            return self.connections[url]
+
+        c = Connection(ip, port, encoding, self.notifications)
+        self.connections[url] = c
         return c
 
-    def is_connected(self, params):
-        """ Use this to find out of the connection you just tried to make
+    def did_connection_succeed(self, params):
+        """ Use this to find out if the connection you just tried to make
         worked. Don't count on it to tell you if the next thing you're going
         to do is going to work.
         """
-        key = self.make_connection_key(params)
-        return (key in self.connections and
-                self.connections[key].is_connected())
+        url = self.make_url(params)
+        return (url in self.connections and
+                self.connections[url].is_connected())
 
-    def make_connection_key(self, params):
-        """ Make a key suitable for indexing a dictionary from a dictionary
-        containing connection parameters. """
+    @staticmethod
+    def make_url(params):
+        """ From device values dictionary, create a url """
         ip = params["ipAddress"]
         port = params["portNumber"]
-        encoding = (params["encryptionKey1"] + "-" +
-                    params["encryptionKey2"])
-        return ip + port + encoding
+        return "{0}:{1}".format(ip, port)
 
-    def props_from_connection(self, connection):
-        """ Get the connection key from a Connection object """
-        return {"ipAddress": connection.ip,
-                "portNumber": str(connection.port),
-                "encryptionKey1": connection.encoding[:23],
-                "encryptionKey2": connection.encoding[24:]}
+    @staticmethod
+    def split_url(url):
+        port = url.split(":")[-1]
+        ip = url[:-(len(port) + 1)]
+        return ip, int(port)
 
     # ----- Logging Configuration ----- #
 
@@ -218,13 +223,16 @@ class Plugin(indigo.PluginBase):
         """ Set up the logging for this module, py4j, and jomnilinkII
         """
         self.configure_logger(log)
-        self.configure_logger(logging.getLogger("connection"))
-        self.configure_logger(logging.getLogger("termapp_server"))
+
         log_py4j = logging.getLogger("py4j")
         self.configure_logger(log_py4j, logging.WARNING, prefix="py4j")
 
-        self.configure_logger(log_omni)
+        self.log_omni = logging.getLogger(__name__ + ".jomnilinkII")
+        self.configure_logger(self.log_omni)
         self.set_omni_logging_level()
+
+        for name in ["connection", "keychain", "termapp_server"]:
+            self.configure_logger(logging.getLogger(name))
 
     def configure_logger(self, logger, level=logging.DEBUG, prefix="",
                          propagate=False):
@@ -265,9 +273,9 @@ class Plugin(indigo.PluginBase):
     def set_omni_logging_level(self):
         """ Set the logging level for logging of the jomnilinkII library """
         if self.debug_omni:
-            log_omni.setLevel(logging.DEBUG)
+            self.log_omni.setLevel(logging.DEBUG)
         else:
-            log_omni.setLevel(logging.ERROR)
+            self.log_omni.setLevel(logging.ERROR)
 
     def start_omni_logging(self, stdout, stderr):
         """ Connect the output pipes of our connection subprocess to threads
@@ -276,12 +284,12 @@ class Plugin(indigo.PluginBase):
             return
         t = threading.Thread(target=self.read_from_file_write_to_log,
                              name="Omni",
-                             args=(log_omni, logging.DEBUG, stdout))
+                             args=(self.log_omni, logging.DEBUG, stdout))
         t.setDaemon(True)
         t.start()
         t = threading.Thread(target=self.read_from_file_write_to_log,
                              name="Omni Error",
-                             args=(log_omni, logging.ERROR, stderr))
+                             args=(self.log_omni, logging.ERROR, stderr))
         t.setDaemon(True)
         t.start()
 
@@ -316,6 +324,8 @@ class Plugin(indigo.PluginBase):
 
     # ----- Device Factory UI ----- #
 
+    hidden = "\u2022" * 15
+
     def getDeviceFactoryUiValues(self, dev_ids):
         """ Called by the IndigoUI to initialize values for the Device
         Factory dialog. If the device group has already been created,
@@ -327,12 +337,27 @@ class Plugin(indigo.PluginBase):
         values = indigo.Dict()
         if dev_ids:
             props = indigo.devices[dev_ids[0]].pluginProps
-            for k in self.dialog_keys:
-                values[k] = props.get(k, "")
+            ip, port = self.split_url(props["url"])
+            values["ipAddress"] = ip
+            values["portNumber"] = str(port)
+            values["prefix"] = props["prefix"]
+            enc1, enc2 = self.keychain.get_keys(ip, port)
+            values["encryptionKey1"] = enc1
+            values["encryptionKey2"] = enc2
+        else:
+            values["encryptionKey1"] = ""
+            values["encryptionKey2"] = ""
+
+        if values["encryptionKey1"]:
+            values["hiddenencryptionKey1"] = self.hidden
+            values["hiddenencryptionKey2"] = self.hidden
+
         errors = self.checkConnectionParameters(values)
         if not errors:
-            self.make_connection(values)
-            if self.is_connected(values):
+            self.make_connection(self.make_url(values),
+                                 values["encryptionKey1"],
+                                 values["encryptionKey2"])
+            if self.did_connection_succeed(values):
                 values["isConnected"] = True
         return values, indigo.Dict()
 
@@ -341,17 +366,43 @@ class Plugin(indigo.PluginBase):
         Factory dialog, when the user closes it, and also by the
         callback for the Connect button (see below). This checks the
         syntax of the port number and encryption keys, and
-        then tries to connect. """
+        then tries to connect.
+
+        If a successful connection is made, save the encryption key
+        in the keychain and update the pluginProps of all devices
+        to match.
+
+        """
         log.debug("Device Factory Config Validation called")
+
+        for key in ["encryptionKey1", "encryptionKey2"]:
+            if values["hidden" + key] != self.hidden:
+                values[key] = values["hidden" + key]
+
         errors = self.checkConnectionParameters(values)
-        if not errors:
-            self.make_connection(values)
-            if not self.is_connected(values):
+        if not errors and not values["isConnected"]:
+            self.make_connection(self.make_url(values),
+                                 values["encryptionKey1"],
+                                 values["encryptionKey2"])
+            if self.did_connection_succeed(values):
+                self.keychain.save_keys(values["ipAddress"],
+                                        values["portNumber"],
+                                        values["encryptionKey1"],
+                                        values["encryptionKey2"])
+                for dev_id in dev_ids:
+                    # in case anything changed, make sure all
+                    # devices match
+                    dev = indigo.devices[dev_id]
+                    dev.pluginProps["url"] = self.make_url(values)
+                    dev.pluginProps["prefix"] = values["prefix"]
+                    dev.replacePluginPropsOnServer(dev.pluginProps)
+            else:
                 log.error("Failed to connect to Omni controller")
                 errors["showAlertText"] = (
                     "Unable to connect with your Omni system. Please recheck "
                     "the information from the Setup menu, as well as your "
                     "network cable and firmware version.")
+
         return not errors, values, errors
 
     def checkConnectionParameters(self, values):
@@ -363,7 +414,10 @@ class Plugin(indigo.PluginBase):
 
         for key, tup in self.dialog_value_checks.items():
             is_valid, message = tup
-            value = values.get(key, None)
+            if key.startswith("hidden"):
+                value = values.get(key[6:], None)
+            else:
+                value = values.get(key, None)
             if value is None or not is_valid(self, value):
                 errors[key] = message
         if not errors:
@@ -377,24 +431,16 @@ class Plugin(indigo.PluginBase):
     def is_valid_encryption_key(self, key):
         return re.match(r"^([\dA-F]{2}\-){7}[\dA-F]{2}$", key) is not None
 
-    dialog_keys = ["ipAddress", "portNumber",
-                   "encryptionKey1", "encryptionKey2"]
-
     dialog_value_checks = {
         "portNumber": (is_valid_port_number,
                        "Please enter the controller port number from the "
                        "Setup menu on your Omni system keypad."),
-        "encryptionKey1": (is_valid_encryption_key,
-                           "Please enter the encryption key part 1 from "
-                           "the Setup menu on your Omni system keypad."),
-        "encryptionKey2": (is_valid_encryption_key,
-                           "Please enter the encryption key part 2 from "
-                           "the Setup menu on your Omni system keypad.")}
-
-    def closedDeviceFactoryUi(self, values, user_cancelled, dev_ids):
-        """ Called by the Indigo UI when the Device Factory dialog is closed.
-        """
-        pass
+        "hiddenencryptionKey1": (is_valid_encryption_key,
+                                 "Please enter the encryption key part 1 from "
+                                 "the Setup menu on your Omni system keypad."),
+        "hiddenencryptionKey2": (is_valid_encryption_key,
+                                 "Please enter the encryption key part 2 from "
+                                 "the Setup menu on your Omni system keypad.")}
 
     def makeConnection(self, values, dev_ids):
         """ Callback for the Connect button in the Device Factory dialog.
@@ -420,9 +466,10 @@ class Plugin(indigo.PluginBase):
 
         results = []
         if ("isConnected" in values and values["isConnected"] and
-                self.is_connected(values)):
+                self.did_connection_succeed(values)):
+            url = self.make_url(values)
             for ext in self.extensions:
-                results.extend(ext.getDeviceList(values, dev_ids))
+                results.extend(ext.getDeviceList(url, dev_ids))
 
         return sorted(results, key=lambda tup: tup[1])
 
@@ -434,9 +481,8 @@ class Plugin(indigo.PluginBase):
         """
         for dev_type in values["deviceGroupList"]:
             ext = self.type_ids_map["device"][dev_type]
-            props = {}
-            for key in self.dialog_keys:
-                props[key] = values[key]
+            props = {"url" : self.make_url(values),
+                     "prefix": values["prefix"]}
             ext.createDevices(dev_type, props, values["prefix"], dev_ids)
         return values
 
@@ -633,10 +679,8 @@ class Plugin(indigo.PluginBase):
 
         if hasattr(indigo.PluginBase, name):
             return getattr(indigo.PluginBase, name)(self, *args)
-        else:
-            return None
 
-    # ----- Menu Item Callbacks ----- #
+    # ----- Write info on connected controllers to log (Menu Item)  ----- #
 
     def writeControllerInfoToLog(self):
         """ Callback for the "Write information on connected OMNI Controllers

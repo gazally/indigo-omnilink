@@ -24,27 +24,31 @@ import pytest
 import fixtures.jomnilinkII as jomni_mimic
 
 
-def create_unit_devices(plugin, indigo, values, unit_types):
+def create_unit_devices(plugin, indigo, values, unit_types,
+                        device_connection_props):
     values = plugin.makeConnection(values, [])
     values["deviceGroupList"] = ["omniStandardX10Unit", "omniRadioRAUnit",
                                  "omniFlagUnit", "omniVoltageUnit"]
     values["prefix"] = "test"
     plugin.createDevices(
         values, [dev.id for dev in indigo.devices.iter()
-                 if dev.pluginProps["ipAddress"] == values["ipAddress"]])
+                 if dev.pluginProps["url"] == device_connection_props["url"]])
     return values
 
 
-def get_unit_devices(indigo, values, unit_types):
+def get_unit_devices(indigo, values, unit_types, device_connection_props):
     return [dev for dev in indigo.devices.iter()
             if (dev.deviceTypeId in unit_types and
-                dev.pluginProps["ipAddress"] == values["ipAddress"])]
+                dev.pluginProps["url"] == device_connection_props["url"])]
 
 
 @pytest.fixture
-def unit_devices(plugin, indigo, device_factory_fields, omni_unit_types):
-    create_unit_devices(plugin, indigo, device_factory_fields, omni_unit_types)
-    return get_unit_devices(indigo, device_factory_fields, omni_unit_types)
+def unit_devices(plugin, indigo, device_factory_fields, omni_unit_types,
+                 device_connection_props):
+    create_unit_devices(plugin, indigo, device_factory_fields, omni_unit_types,
+                        device_connection_props)
+    return get_unit_devices(indigo, device_factory_fields, omni_unit_types,
+                            device_connection_props)
 
 
 def test_get_device_list_returns_unit(plugin, omni1, omni_unit_types,
@@ -71,24 +75,25 @@ def test_get_device_list_returns_empty_list_on_connection_error(
 
 
 def test_notification_ignores_non_unit_notifications(
-        plugin, indigo, device_factory_fields, omni1, omni_unit_types):
+        plugin, indigo, device_factory_fields, omni1, omni_unit_types,
+        device_connection_props):
     status_msg = jomni_mimic.ObjectStatus(Mock(),
                                           [Mock(side_effect=AssertionError)])
     create_unit_devices(plugin, indigo, device_factory_fields,
-                        omni_unit_types)
+                        omni_unit_types, device_connection_props)
     omni1._notify("objectStausNotification", status_msg)
 
 
 def test_create_devices_creates_device_for_each_unit(
         plugin, unit_devices, device_factory_fields, indigo,
-        omni_unit_types):
+        omni_unit_types, device_connection_props):
     assert len(unit_devices) == 3
 
     plugin.createDevices(device_factory_fields,
                          [dev.id for dev in unit_devices])
 
     assert len(get_unit_devices(indigo, device_factory_fields,
-                                omni_unit_types)) == 3
+                                omni_unit_types, device_connection_props)) == 3
 
 
 def test_device_start_comm_succeeds_on_valid_input(
@@ -111,16 +116,16 @@ def test_device_start_comm_sets_error_state_on_connection_error(
 
     plugin.deviceStartComm(dev)
     assert dev.error_state is not None
-    assert plugin.errorLog.called
-    plugin.errorLog.reset_mock()
 
 
 def test_remove_devices_removes_unit_devices(
-        plugin, indigo, unit_devices, device_factory_fields, omni_unit_types):
+        plugin, indigo, unit_devices, device_factory_fields, omni_unit_types,
+        device_connection_props):
     dev_ids = [dev.id for dev in unit_devices]
     assert len(dev_ids) > 0
     plugin.removeDevices(device_factory_fields, dev_ids)
-    devices = get_unit_devices(indigo, device_factory_fields, omni_unit_types)
+    devices = get_unit_devices(indigo, device_factory_fields, omni_unit_types,
+                               device_connection_props)
     assert not devices
 
 
@@ -146,12 +151,14 @@ def test_notification_changes_device_state(
 
 def test_disconnect_sets_error_state_of_correct_unit_device(
         plugin, indigo, unit_devices, device_factory_fields,
+        device_connection_props_2,
         device_factory_fields_2, omni2, omni_unit_types):
 
     create_unit_devices(plugin, indigo, device_factory_fields_2,
-                        omni_unit_types)
+                        omni_unit_types, device_connection_props_2)
     unit_devices_2 = get_unit_devices(indigo, device_factory_fields_2,
-                                      omni_unit_types)
+                                      omni_unit_types,
+                                      device_connection_props_2)
     assert len(unit_devices_2) == 3
 
     for dev in unit_devices + unit_devices_2:

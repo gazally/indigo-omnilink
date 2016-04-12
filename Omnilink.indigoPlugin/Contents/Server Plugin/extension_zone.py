@@ -43,10 +43,13 @@ class ZoneExtension(extensions.PluginExtension):
         self.type_ids = {"device": ["omniZoneDevice"],
                          "action": [],
                          "event": []}
-        self.device_ids = []
-        self._zone_info = {}
         self.callbacks = {}
         self.reports = {"Zones": self.say_zone_info}
+
+        self.device_ids = []
+
+        # key is url, value is ZoneInfo instance
+        self._zone_info = {}
 
     # ----- Device Start and Stop Methods ----- #
 
@@ -88,14 +91,14 @@ class ZoneExtension(extensions.PluginExtension):
 
     # ----- Device creation methods ----- #
 
-    def getDeviceList(self, props, dev_ids):
+    def getDeviceList(self, url, dev_ids):
         """ Query the Omni controller to see if any zones are defined.
         If there are, return omniZoneDevice as the device type we can create.
         Otherwise, return an empty list.
         """
         result = []
         try:
-            if self.zone_info(props).zone_props:
+            if self.zone_info(url).zone_props:
                 result = [("omniZoneDevice", "Zone")]
         except (Py4JError, ConnectionError):
             log.error("Failed to fetch zone information from Omni Controller")
@@ -119,7 +122,7 @@ class ZoneExtension(extensions.PluginExtension):
                            for id in dev_ids
                            if indigo.devices[id].deviceTypeId == dev_type]
         try:
-            for zp in self.zone_info(values).zone_props.values():
+            for zp in self.zone_info(values["url"]).zone_props.values():
                 if zp.number not in old_dev_numbers:
                     self.create_device(zp, values, prefix)
         except (Py4JError, ConnectionError):
@@ -177,46 +180,39 @@ class ZoneExtension(extensions.PluginExtension):
             if (status_msg.getStatusType() !=
                     connection.jomnilinkII.Message.OBJ_TYPE_ZONE):
                 return
-            connection_props = self.plugin.props_from_connection(connection)
-            zone_info = self.zone_info(connection_props)
+            zone_info = self.zone_info(connection.url)
             number, status = zone_info.number_and_status_from_notification(
                 status_msg)
         except (Py4JError, ConnectionError):
             log.debug("status_notification exception in Zone", exc_info=True)
         else:
-            connection_key = self.plugin.make_connection_key(connection_props)
-            for dev_id in self.device_ids:
-                dev = indigo.devices[dev_id]
-                if (self.plugin.make_connection_key(dev.pluginProps) ==
-                        connection_key and
-                        dev.pluginProps["number"] == number):
+            for dev in self.devices_from_url(connection.url):
+                if dev.pluginProps["number"] == number:
                     self.update_device_from_status(dev, status)
 
     def reconnect_notification(self, connection):
-        connection_key = self.plugin.make_connection_key(
-            self.plugin.props_from_connection(connection))
-        for dev_id in self.device_ids:
-            dev = indigo.devices[dev_id]
-            if (self.plugin.make_connection_key(dev.pluginProps) ==
-                    connection_key):
-                self.update_device_status(dev)
+        for dev in self.devices_from_url(connection.url):
+            self.update_device_status(dev)
 
     def disconnect_notification(self, connection, e):
-        connection_key = self.plugin.make_connection_key(
-            self.plugin.props_from_connection(connection))
+        for dev in self.devices_from_url(connection.url):
+            dev.setErrorStateOnServer("disconnected")
+
+    def devices_from_url(self, url):
+        """ Produce an iteration of device objects matching the given url
+        by selecting from self.device_ids """
         for dev_id in self.device_ids:
             dev = indigo.devices[dev_id]
-            if (self.plugin.make_connection_key(dev.pluginProps) ==
-                    connection_key):
-                dev.setErrorStateOnServer("disconnected")
+            if (url == dev.pluginProps["url"]):
+                yield dev
 
     def update_device_status(self, dev):
         try:
-            zone_info = self.zone_info(dev.pluginProps)
+            zone_info = self.zone_info(dev.pluginProps["url"])
             props = zone_info.zone_props[dev.pluginProps["number"]]
             status = zone_info.fetch_status(dev.pluginProps["number"])
         except (ConnectionError, Py4JError):
-            log.error("Failed to get status of zone {0} from Omni".format(
+            log.debug("Failed to get status of zone {0} from Omni".format(
                 dev.pluginProps["number"]))
             dev.setErrorStateOnServer("disconnected")
         else:
@@ -238,18 +234,20 @@ class ZoneExtension(extensions.PluginExtension):
         dev.updateStateOnServer("sensorValue", status.loop,
                                 uiValue=str(status.loop))
 
-    def zone_info(self, props):
-        key = self.plugin.make_connection_key(props)
-        if key not in self._zone_info:
-            self._zone_info[key] = ZoneInfo(
-                self.plugin.make_connection(props))
-        return self._zone_info[key]
+    def zone_info(self, url):
+        """ Handles caching ZoneInfo objects by url. Makes a new one if
+        we don't have it yet for that url or if the underlying connection
+        object has changed. """
+        connection = self.plugin.make_connection(url)
+        if (url not in self._zone_info or
+                self._zone_info[url].connection is not connection):
+            self._zone_info[url] = ZoneInfo(connection)
+        return self._zone_info[url]
 
     # ----- Write info on zones to log ----- #
 
     def say_zone_info(self, report, connection, say):
-        zone_info = self.zone_info(
-            self.plugin.props_from_connection(connection))
+        zone_info = self.zone_info(connection.url)
         zone_info.report(say)
 
 

@@ -143,14 +143,13 @@ class PluginExtension(object):
     callbacks = None
     reports = None
 
-    def getDeviceList(self, props, dev_ids):
+    def getDeviceList(self, url, dev_ids):
         """ this is called when the plugin needs to know what functionality
-        is available on the particular Omni system specified by the props
-        dictionary. Return a list of tuples, (device type, display string).
+        is available on the particular Omni system specified by the url.
+        Return a list of tuples, (device type, display string).
         Should catch its own exceptions.
         arguments:
-            props -- dictionary containing current settings of device factory
-                     dialog
+            url -- network address of controller
             dev_ids -- list of device_ids in the device factory group
         """
         return []

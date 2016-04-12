@@ -111,6 +111,7 @@ def test_prefs_ui_validation_succeeds_on_valid_input(plugin):
 
 def test_device_factory_uivalidation_succeeds_on_valid_input(
         plugin, device_factory_fields):
+
     ok, d, e = plugin.validateDeviceFactoryUi(device_factory_fields, [])
     assert ok
     assert not plugin.errorLog.called
@@ -131,8 +132,8 @@ def test_make_connection_clears_error_state_on_valid_input(
         plugin, device_factory_fields):
     values = dict(device_factory_fields)
     errors = {"portNumberError": True,
-              "encryptionKey1Error": True,
-              "encryptionKey2Error": True,
+              "hiddenencryptionKey1Error": True,
+              "hiddenencryptionKey2Error": True,
               "error": True}
 
     values.update(errors)
@@ -151,6 +152,9 @@ def test_make_connection_sets_error_state_on_invalid_input(
 
     values = plugin.makeConnection(values, [])
 
+    print(values)
+    print(errorkeys)
+
     assert values["error"]
     for k in errorkeys:
         assert values[k + "Error"]
@@ -158,15 +162,18 @@ def test_make_connection_sets_error_state_on_invalid_input(
 
 
 def test_make_connection_sets_error_state_on_failure_to_connect(
-        plugin, py4j, jomnilinkII, device_factory_fields):
+        plugin, py4j, jomnilinkII, device_factory_fields,
+        invalid_device_factory_fields):
     jomnilinkII.Connection.side_effect = py4j.protocol.Py4JJavaError("test")
 
     values = plugin.makeConnection(device_factory_fields, [])
 
     assert values["error"]
-    keys = ["portNumber", "encryptionKey1", "encryptionKey2"]
+
+    _, keys = invalid_device_factory_fields
     for k in keys:
         assert not values[k + "Error"]
+
     assert values["connectionError"]
     assert not values["isConnected"]
     assert plugin.errorLog.called
@@ -179,14 +186,42 @@ def test_get_device_factory_uivalues_handles_empty_device_list(plugin):
     assert "isConnected" not in values or not values["isConnected"]
 
 
-def test_get_device_factory_uivalues_makes_connection_given_device(
-        indigo, plugin, device_factory_fields):
-    dev = indigo.device.create(Mock(), "omniControllerDevice",
-                               device_factory_fields)
+def test_validate_device_factory_uivalues_updates_device_fields(
+        indigo, plugin, omni1, device_factory_defaults,
+        device_factory_valid_input_2,
+        device_connection_props, device_connection_props_2):
 
-    values, errors = plugin.getDeviceFactoryUiValues([dev.id])
-    assert len(errors) == 0
-    assert values["isConnected"]
+    dev = indigo.device.create(Mock(), "omniControllerDevice",
+                               device_connection_props)
+    omni1.connected.return_value = False
+
+    values, _ = plugin.getDeviceFactoryUiValues([dev.id])
+    assert "isConnected" not in values or not values["isConnected"]
+    plugin.errorLog.reset_mock()
+
+    assert dev.pluginProps["url"] != device_connection_props_2["url"]
+
+    changes = dict(device_factory_defaults)
+    changes.update(values)
+    changes.update(device_factory_valid_input_2)
+
+    plugin.validateDeviceFactoryUi(changes, [dev.id])
+
+    assert dev.pluginProps["url"] == device_connection_props_2["url"]
+
+
+def test_get_device_factory_uivalues_handles_enckeys_missing(
+        indigo, plugin, device_connection_props_2,
+        security_find_func):
+
+    dev = indigo.device.create(Mock(), "omniControllerDevice",
+                               device_connection_props_2)
+    security_find_func.return_value = ("", "error")
+
+    values, _ = plugin.getDeviceFactoryUiValues([dev.id])
+    assert "isConnected" not in values or not values["isConnected"]
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
 
 
 def recurse_elem(root):

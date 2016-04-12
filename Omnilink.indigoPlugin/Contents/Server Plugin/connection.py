@@ -15,6 +15,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""Connection management for Leviton/HAI Omni plugin for IndigoServer"""
+
 import logging
 import subprocess
 import threading
@@ -24,8 +26,6 @@ from py4j.java_gateway import JavaGateway, CallbackServerParameters
 from py4j.protocol import Py4JError, Py4JJavaError
 
 log = logging.getLogger(__name__)
-
-"""Connection management for Leviton/HAI Omni plugin for IndigoServer"""
 
 
 class ConnectionError(RuntimeError):
@@ -43,36 +43,55 @@ class Connection(object):
 
     The Connection class owns the first and second levels, and individual
     Connection objects manage the third level.
+
+    Class methods:
+    startup(timeout) -- launch the Java subprocess and create the py4j gateway
+    shutdown -- close the gateway and kill the subprocess
+
+    Public properties:
+    omni -- a Connection object from jomnilinkII
+    jomnilinkII -- the jomnilinkII Java library
+
+    Public instance methods:
+    is_connected -- returns True if the jomnilinkII Connection object exists
+                    and claims to be connected
+    update -- if the jomnilinkII Connection object says it is no longer
+              connected, try to make a new one. If that fails to connect,
+              the Python Connection object will go into a persistently
+              unconnected state. Not sure that's a good idea. Probably need two
+              levels of timeout, one that tries immediately to reconnect and
+              another that pings every 5 minutes until the link comes back
+
     """
     javaproc = None
     gateway = None
     java_running = False
 
-    def __init__(self, ip, port, encoding, event_callbacks=[],
-                 status_callbacks=[], reconnect_callbacks=[],
-                 disconnect_callbacks=[]):
+    def __init__(self, ip, port, encoding, notifications):
         """
         """
         self.ip, self.port, self.encoding = ip, port, encoding
-        self.status_callbacks = status_callbacks
-        self.reconnect_callbacks = reconnect_callbacks
-        self.event_callbacks = event_callbacks
-        self.disconnect_callbacks = disconnect_callbacks
+        self.url = "{0}:{1}".format(ip, port)
+        self.status_callbacks = notifications["status"]
+        self.reconnect_callbacks = notifications["reconnect"]
+        self.event_callbacks = notifications["event"]
+        self.disconnect_callbacks = notifications["disconnect"]
         self._omni = None
 
-        if self.gateway is None:
+        if self.gateway is None or not self.encoding:
             return
 
-        self.make_omni_connection()
+        self._make_omni_connection()
 
-    def make_omni_connection(self):
+    def _make_omni_connection(self):
         reconnecting = self._omni is not None
         if reconnecting:
-            log.debug("Attempting to reconnect to Omni system at " +
-                      self.ip)
+            message = "Attempting to reconnect to "
         else:
-            log.debug("Initiating connection with Omni system at " +
-                      self.ip)
+            message = "Initiating connection with "
+
+        log.debug(message + " Omni system at {0}:{1}".format(
+            self.ip, self.port))
 
         self._omni = None
         try:
@@ -112,10 +131,12 @@ class Connection(object):
         return self._omni is not None and self._omni.connected()
 
     def update(self):
+        if not self.encoding:
+            return
         if self._omni is None:
             return
         if not self._omni.connected():
-            self._omni = self.make_omni_connection()
+            self._omni = self._make_omni_connection()
 
     @property
     def jomnilinkII(self):

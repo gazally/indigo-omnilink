@@ -11,10 +11,10 @@
     <Field id="portNumber" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
       <Label>Port:</Label>
     </Field>
-    <Field id="encryptionKey1" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
+    <Field id="hiddenencryptionKey1" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
       <Label>Encryption Key Part 1:</Label>
     </Field>
-    <Field id="encryptionKey2" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
+    <Field id="hiddenencryptionKey2" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
       <Label>Encryption Key Part 2:</Label>
     </Field>
     <Field id="connect" type="button" enabledBindingId="isConnected" enabledBindingNegate="true">
@@ -34,8 +34,8 @@
     <Field id="error" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="connectionError" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="portNumberError" type="checkbox" hidden="true" defaultValue="false"/>
-    <Field id="encryptionKey1Error" type="checkbox" hidden="true" defaultValue="false"/>
-    <Field id="encryptionKey2Error" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="hiddenencryptionKey1Error" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="hiddenencryptionKey2Error" type="checkbox" hidden="true" defaultValue="false"/>
 
     <Field type="separator" id="sep1"/>
 
@@ -61,10 +61,10 @@
     <Field id="portNumberErrorMessage" type="label" fontColor="red" visibleBindingId="portNumberError" visibleBindingValue="true">
       <Label>Please enter the controller port number from the Setup menu on your Omni system keypad.</Label>
     </Field>
-    <Field id="encryptionKey1ErrorMessage" type="label" fontColor="red" visibleBindingId="encryptionKey1Error" visibleBindingValue="true">
+    <Field id="hiddenencryptionKey1ErrorMessage" type="label" fontColor="red" visibleBindingId="hiddenencryptionKey1Error" visibleBindingValue="true">
       <Label>Please enter the encryption key part 1 from the Setup menu on your Omni system keypad.</Label>
     </Field>
-    <Field id="encryptionKey2ErrorMessage" type="label" fontColor="red" visibleBindingId="encryptionKey2Error" visibleBindingValue="true">
+    <Field id="hiddenencryptionKey2ErrorMessage" type="label" fontColor="red" visibleBindingId="hiddenencryptionKey2Error" visibleBindingValue="true">
       <Label>Please enter the encryption key part 2 from the Setup menu on your Omni system keypad.</Label>
     </Field>
 

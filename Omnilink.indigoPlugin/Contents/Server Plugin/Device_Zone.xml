@@ -2,11 +2,6 @@
   <Name>Omni II Zone</Name>
   <States>
     <!-- onOffState and sensorValue are inherited from the sensor type device -->
-    <State id="number">
-      <ValueType>Integer</ValueType>
-      <TriggerLabel>Number:</TriggerLabel>
-      <ControlPageLabel>Number:</ControlPageLabel>
-    </State>
     <State id="name">
       <ValueType>String</ValueType>
       <TriggerLabel>Name:</TriggerLabel>

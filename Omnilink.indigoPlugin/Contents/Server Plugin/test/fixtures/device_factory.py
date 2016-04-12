@@ -23,50 +23,104 @@ import pytest
 
 
 @pytest.fixture
-def device_factory_flags():
-    """ Initial state of flags in the Device factory dialog. this
-    should really read from the xmls instead """
-    return {"isConnected": False,
-            "error": False,
-            "connectionError": False,
-            "portNumberError": False,
-            "encryptionKey1Error": False,
-            "encryptionKey2Error": False}
+def device_factory_defaults(xmls):
+    results = {}
+    df = [d for d in xmls["Devices"] if d.tag == "DeviceFactory"][0]
+    ui = [e for e in df if e.tag == "ConfigUI"][0]
+    for field in ui:
+        value = ""
+        if field.attrib["type"] == "textfield":
+            if "defaultValue" in field.attrib:
+                value = field.attrib["defaultValue"]
+        elif field.attrib["type"] == "checkbox":
+            if "defaultValue" in field.attrib:
+                value = field.attrib["defaultValue"] == "true"
+            else:
+                value = False
+        results[field.attrib["id"]] = value
+    return results
 
 
 @pytest.fixture
-def device_factory_fields(device_factory_flags):
-    """ Return some valid fields for the device factory dialog """
-    values = {"ipAddress": "192.168.1.42",
-              "portNumber": "4444",
-              "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
-              "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
-              "prefix": ""}
-    values.update(device_factory_flags)
-    return values
+def device_factory_valid_input(enckey1, enckey2):
+    """ Return some valid user input for the device factory dialog """
+    return {"ipAddress": "192.168.1.42",
+            "portNumber": "4444",
+            "hiddenencryptionKey1": enckey1,
+            "hiddenencryptionKey2": enckey2,
+            "prefix": ""}
 
 
 @pytest.fixture
-def device_factory_fields_2(device_factory_flags):
-    """ Return some different valid fields for the device factory dialog """
-    values2 = {"ipAddress": "10.0.0.2",
-               "portNumber": "4444",
-               "encryptionKey1": "01-23-45-67-89-AB-CD-EF",
-               "encryptionKey2": "01-23-45-67-89-AB-CD-EF",
-               "prefix": ""}
-    values2.update(device_factory_flags)
-    return values2
+def device_connection_props():
+    """ Return connection parameters corresponding to
+    device_factory_valid_input """
+    return {"url": "192.168.1.42:4444",
+            "prefix": ""}
 
 
 @pytest.fixture
-def invalid_device_factory_fields(device_factory_fields):
+def enckey1():
+    return "01-23-45-67-89-AB-CD-EF"
+
+
+@pytest.fixture
+def enckey2():
+    return "01-23-45-67-89-AB-CD-EF"
+
+
+@pytest.fixture
+def device_factory_fields(device_factory_defaults, plugin,
+                          device_factory_valid_input):
+    """ Return UI values set up with valid user input """
+    dialog = dict(device_factory_defaults)
+    values, _ = plugin.getDeviceFactoryUiValues([])
+    dialog.update(values)
+    dialog.update(device_factory_valid_input)
+    return dialog
+
+
+@pytest.fixture
+def device_factory_valid_input_2(enckey1, enckey2):
+    """ Return some different valid user input for the device factory dialog
+    """
+    return {"ipAddress": "10.0.0.2",
+            "portNumber": "4444",
+            "hiddenencryptionKey1": enckey1,
+            "hiddenencryptionKey2": enckey2,
+            "prefix": ""}
+
+
+@pytest.fixture
+def device_connection_props_2():
+    """ Return connection parameters corresponding to
+    device_factory_valid_input_2.
+    """
+    return {"url": "10.0.0.2:4444",
+            "prefix": ""}
+
+
+@pytest.fixture
+def device_factory_fields_2(device_factory_defaults, plugin,
+                            device_factory_valid_input_2):
+    """ Return UI values set up with different valid user input """
+    dialog = dict(device_factory_defaults)
+    values, _ = plugin.getDeviceFactoryUiValues([])
+    dialog.update(values)
+    dialog.update(device_factory_valid_input_2)
+    return dialog
+
+
+@pytest.fixture
+def invalid_device_factory_fields(device_factory_defaults):
     """Returns two things: a dictionary set up for the device factory ui
     with invalid user input, and a list of the keys which should be
     marked as errors.
     """
-    values = dict(device_factory_fields)
-    invalid_values = {"portNumber": "not a port",
-                      "encryptionKey1": "not an encryption key",
-                      "encryptionKey2": "still not an encryption key"}
-    values.update(invalid_values)
-    return values, invalid_values.keys()
+    invalid_values = dict(device_factory_defaults)
+    invalid_input = {"portNumber": "not a port",
+                     "hiddenencryptionKey1": "not an encryption key",
+                     "hiddenencryptionKey2": "still not an encryption key"}
+    invalid_values.update(invalid_input)
+
+    return invalid_values, invalid_input.keys()

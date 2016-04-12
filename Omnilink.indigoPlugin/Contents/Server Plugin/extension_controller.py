@@ -121,7 +121,7 @@ class ControllerExtension(extensions.PluginExtension):
         device states accordingly, and clear the last checked
         security code.
         """
-        connection = self.plugin.make_connection(device.pluginProps)
+        connection = self.plugin.make_connection(device.pluginProps["url"])
         try:
             info = self.get_controller_info(connection)
             device.updateStateOnServer("connected", True)
@@ -219,7 +219,7 @@ class ControllerExtension(extensions.PluginExtension):
 
     # ----- Device creation ----- #
 
-    def getDeviceList(self, props, dev_ids):
+    def getDeviceList(self, url, dev_ids):
         """ Return list of devices this extension can create """
         return [("omniControllerDevice", "Controller")]
 
@@ -325,15 +325,12 @@ class ControllerExtension(extensions.PluginExtension):
 
     def find_device_from_connection(self, connection):
         """ Given a connection, try to find a device with
-        matching ip, port and encryption keys. If not found, raise
-        a KeyError.
+        matching url. If not found, raise a KeyError.
         """
-        connection_key = self.plugin.make_connection_key(
-            self.plugin.props_from_connection(connection))
+        url = connection.url
         for dev_id in self.device_ids:
             dev = indigo.devices[dev_id]
-            if (self.plugin.make_connection_key(dev.pluginProps) ==
-                    connection_key):
+            if (dev.pluginProps["url"] == url):
                 return dev
         raise KeyError
 
@@ -389,7 +386,7 @@ class ControllerExtension(extensions.PluginExtension):
         results = [("0", "All Keypads")]
         device = indigo.devices[device_id]
         try:
-            c = self.plugin.make_connection(device.pluginProps)
+            c = self.plugin.make_connection(device.pluginProps["url"])
             M = c.jomnilinkII.Message
             count = c.omni.reqObjectTypeCapacities(
                 M.OBJ_TYPE_CONSOLE).getCapacity()
@@ -467,7 +464,7 @@ class ControllerExtension(extensions.PluginExtension):
                       "{0} which is not between 1 and 255".format(area))
         else:
             try:
-                c = self.plugin.make_connection(dev.pluginProps)
+                c = self.plugin.make_connection(dev.pluginProps["url"])
                 scv = c.omni.reqSecurityCodeValidation(
                     int(area), *[ord(ch) - ord("0") for ch in code])
 
@@ -499,7 +496,7 @@ class ControllerExtension(extensions.PluginExtension):
 
         enable = 1 if action.pluginTypeId == "enableConsoleBeeper" else 0
         try:
-            c = self.plugin.make_connection(dev.pluginProps)
+            c = self.plugin.make_connection(dev.pluginProps["url"])
             CM = c.jomnilinkII.MessageTypes.CommandMessage
             console = int(action.props["consoleNumber"])
             c.omni.controllerCommand(CM.CMD_CONSOLE_ENABLE_DISABLE_BEEPER,
@@ -522,7 +519,7 @@ class ControllerExtension(extensions.PluginExtension):
                   'console {2}'.format(action.props["beepCommand"], dev.name,
                                        action.props["consoleNumber"]))
         try:
-            c = self.plugin.make_connection(dev.pluginProps)
+            c = self.plugin.make_connection(dev.pluginProps["url"])
             CM = c.jomnilinkII.MessageTypes.CommandMessage
             console = int(action.props["consoleNumber"])
             beep = action.props["beepCommand"]

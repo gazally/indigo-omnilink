@@ -18,7 +18,6 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 from StringIO import StringIO
-from subprocess import Popen
 import time
 
 import mock
@@ -34,15 +33,53 @@ def version():
     return "0.2.0"
 
 
+@pytest.fixture
+def security_find_func(enckey1, enckey2):
+    """return the mock that will be called by the communicate method of
+    the return value of the monkeypatched Popen when given the
+    security find-internet-password command
+    """
+    return Mock(
+        return_value=("", 'password: "{0}"\n'.format("-".join([enckey1,
+                                                               enckey2]))))
+
+
+@pytest.fixture
+def security_add_func(enckey1, enckey2):
+    """return the mock that will be called by the communicate method of
+    the return value of the monkeypatched Popen when given the
+    security add-internet-password command
+    """
+    return Mock(return_value=("", ""))
+
+
 @pytest.fixture(autouse=True)
-def popen(monkeypatch):
-    """ Monkey patch Popen so it doesn't launch java, but does have
-    a stdout that a line of text can be read from """
-    javaproc_mock = Mock()
-    javaproc_mock.stdout = StringIO("Java Gateway started\n")
-    javaproc_mock.stderr = StringIO("")
-    popen_mock = mock.create_autospec(Popen)
-    popen_mock.return_value = javaproc_mock
+def popen(monkeypatch, security_find_func, security_add_func):
+    """ Monkey patch Popen so it returns a mock with appropriate behavior """
+
+    def security_imposter(command):
+        if command.startswith("find-internet-password"):
+            return security_find_func()
+        elif command.startswith("add-internet-password"):
+            return security_add_func()
+
+    def popen_imposter(command, stdin=None, stdout=None, stderr=None):
+        """ Return a Mock to stand in for the return value from
+        subprocess.Popen """
+        if "java" in command[0]:
+            # Need a stdout that a line of text can be read from
+            javaproc_mock = Mock()
+            javaproc_mock.stdout = StringIO("Java Gateway started\n")
+            javaproc_mock.stderr = StringIO("")
+            return javaproc_mock
+        elif "security" in command[0]:
+            m = Mock()
+            m.communicate.side_effect = security_imposter
+            return m
+        else:
+            assert False
+
+    popen_mock = Mock(side_effect=popen_imposter)
     monkeypatch.setattr("subprocess.Popen", popen_mock)
     return popen_mock
 
