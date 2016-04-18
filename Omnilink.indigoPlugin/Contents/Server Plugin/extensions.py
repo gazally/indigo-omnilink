@@ -68,15 +68,54 @@ class PluginExtension(object):
             those callbacks will be the extension instance, not the plugin
             instance. Complaints will be made to the error log if two
             extensions try to add methods with the same name.
+        reports -- This should be set to a dictionary. Keys should be selected
+            from the following list, and values should be methods with the
+            following signature:
+
+            def report_func(report_name, connection, say)
+
+            where connection is a Connection object and say is a method to use
+            for output. Report methods should print information from the
+            controller in a tidy format, and throw exceptions if they
+            encounter communication problems.
+            Possible report topics:
+
+                "System Information", "System Troubles", "System Features",
+                "System Capacities", "Zones", "Areas", "Units", "Buttons",
+                "Codes", "Thermostats", "Sensors", "Messages", "Audio Zones",
+                "Audio Sources", "Event Log"
 
     Methods stubbed in the base class that subclasses may implement:
         getDeviceList
         createDevices
         update
-        status_notification
-        event_notification
-        disconnect_notification
-        reconnect_notification
+
+    Notification callbacks that subclasses may implement if they need updates
+    as events happen:
+
+    status_notification(self, connection, status):
+        Called when the Omni system sends an object status notification.
+        This should catch all exceptions.
+            connection -- Connection object (from plugin.py, not jomnilinkII)
+            status - ObjectStatus object from jomnilinkII
+
+    event_notification(self, connection, status):
+        Called when Omni system sends an "other event" notification.
+        Should catch all exceptions.
+            connection -- Connection object (from plugin.py, not jomnilinkII)
+            other - OtherEventNotifications object from jomnilinkII
+
+    disconnect_notification(self, connection, e):
+        Called when jomnilinkII sends a disconnect notification.
+        Should catch all exceptions.
+            connection -- Connection object (from plugin.py, not jomnilinkII)
+            e -- Java exception
+
+    reconnect_notification(self, connection, omni):
+        Called when the plugin reconnects to the Omni system.
+        Should catch all exceptions.
+            connection -- existing connections.Connection object
+            omni -- new jomnilinkII.Connection object
 
     In addition to the above, when an action/device/trigger with a type id
     found in the type_ids attribute is found in a call to any of the following
@@ -102,6 +141,13 @@ class PluginExtension(object):
         getDeviceStateList
         getDeviceDisplayStateId
         didDeviceCommPropertyChange
+        actionControlGeneral
+        actionControlDimmerRelay
+        actionControlSensor
+        actionControlSpeedControl
+        actionControlThermostat
+        actionControlIO
+        actionControlSprinkler
         triggerStartProcessing
         triggerStopProcessing
         didTriggerProcessingPropertyChange
@@ -118,15 +164,15 @@ class PluginExtension(object):
     # ----- Things that subclasses should set up in __init__ -----#
     type_ids = None
     callbacks = None
+    reports = None
 
-    def getDeviceList(self, props, dev_ids):
+    def getDeviceList(self, url, dev_ids):
         """ this is called when the plugin needs to know what functionality
-        is available on the particular Omni system specified by the props
-        dictionary. Return a list of tuples, (device type, display string).
+        is available on the particular Omni system specified by the url.
+        Return a list of tuples, (device type, display string).
         Should catch its own exceptions.
         arguments:
-            props -- dictionary containing current settings of device factory
-                     dialog
+            url -- network address of controller
             dev_ids -- list of device_ids in the device factory group
         """
         return []
@@ -164,39 +210,4 @@ class PluginExtension(object):
     def update(self):
         """ This is called on a clock from within RunConcurrentThread.
         Extensions should use this to update devices. """
-        pass
-
-    def status_notification(self, connection, status):
-        """ Called when the Omni system sends an object status notification.
-        This should catch all exceptions.
-        arguments:
-            connection -- Connection object (from plugin.py, not jomnilinkII)
-            status - ObjectStatus object from jomnilinkII
-        """
-        pass
-
-    def event_notification(self, connection, other):
-        """ Called when Omni system sends an "other event" notification.
-        Should catch all exceptions.
-        arguments:
-            connection -- Connection object (from plugin.py, not jomnilinkII)
-            other - OtherEventNotifications object from jomnilinkII
-        """
-        pass
-
-    def disconnect_notification(self, connection, e):
-        """ Called when jomnilinkII sends a disconnect notification.
-        Should catch all exceptions.
-        arguments:
-            connection -- Connection object (from plugin.py, not jomnilinkII)
-            e -- Java exception
-        """
-        pass
-
-    def reconnect_notification(self, connection):
-        """ Called when the plugin reconnects to the Omni system.
-        Should catch all exceptions.
-        arguments:
-            connection -- Connection object (from plugin.py, not jomnilinkII)
-        """
         pass

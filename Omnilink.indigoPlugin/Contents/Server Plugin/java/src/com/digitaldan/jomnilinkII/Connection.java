@@ -1,8 +1,8 @@
 package com.digitaldan.jomnilinkII;
 
 /**
- *  Copyright (C) 2009  Dan Cunningham                                         
- *                                                                             
+ *  Copyright (C) 2009  Dan Cunningham
+ *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
  * as published by the Free Software Foundation, version 2
@@ -25,6 +25,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -95,6 +96,8 @@ public class Connection extends Thread {
 	public static int OMNI_TO = 60 * 5 * 1000;
 	//Keep alive time, omni timeout minus one minute
 	public static int PING_TO = OMNI_TO - (1000 * 60);
+	//But give up after 10 sec if no response at first connection
+	public static int OMNI_INITIAL_TO = 10 * 1000;
 
 	public boolean debug;
 	private boolean connected;
@@ -116,7 +119,7 @@ public class Connection extends Thread {
 	private Vector<DisconnectListener> disconnectListeners;
 	private NotificationHandler notificationHandler;
 	private ConnectionWatchdog watchdog;
-	public Connection(String address, int port, String key) 
+	public Connection(String address, int port, String key)
 	throws Exception,IOException,UnknownHostException {
 
 		ping = true;
@@ -126,12 +129,13 @@ public class Connection extends Thread {
 		notificationListeners = new Vector();
 		disconnectListeners = new Vector();
 
-		byte[] _key = hexStringToByteArray(key.replaceAll("\\W", ""));		
+		byte[] _key = hexStringToByteArray(key.replaceAll("\\W", ""));
 
-		socket = new Socket(address,port);
+		socket = new Socket();
+		socket.setSoTimeout(OMNI_INITIAL_TO);
+		socket.connect(new InetSocketAddress(address,port), OMNI_INITIAL_TO);
 		is = socket.getInputStream();
 		os = socket.getOutputStream();
-		socket.setSoTimeout(OMNI_TO);
 		tx = 1;
 		rx = 1;
 
@@ -142,6 +146,7 @@ public class Connection extends Thread {
 		if(rec.type() != PACKET_TYPE_CONTROLLER_ACKNOWLEDGE_NEW_SESSION)
 			throw new Exception("Controller not accepting new connections");
 
+		socket.setSoTimeout(OMNI_TO);
 		byte [] data = rec.data();
 
 		int version = (int)((data[0] << 8) + (data[1] << 0));
@@ -173,16 +178,16 @@ public class Connection extends Thread {
 		}
 		connected = true;
 		lastTXMessageTime = System.currentTimeMillis();
-		
+
 		notificationListeners = new Vector<NotificationListener>();
-		
+
 		this.setName("OmniReaderThread");
 		this.start();
-		
+
 		notificationHandler = new NotificationHandler();
 		notificationHandler.setName("NotificationHandlerThread");
 		notificationHandler.start();
-		
+
 		ConnectionWatchdog watchdog = new ConnectionWatchdog();
 		watchdog.setName("ConnectionWatchdogThread");
 		watchdog.start();
@@ -206,7 +211,7 @@ public class Connection extends Thread {
         public void setDebug(boolean value){
   	        debug = value;
         }
-    
+
 	public Exception lastError(){
 		return lastException;
 	}
@@ -252,7 +257,7 @@ public class Connection extends Thread {
 				throw new OmniNotConnectedException(lastError());
 
 			OmniPacket ret;
-			sendBytesEncrypted(new OmniPacket(PACKET_TYPE_OMNI_LINK_MESSAGE, 
+			sendBytesEncrypted(new OmniPacket(PACKET_TYPE_OMNI_LINK_MESSAGE,
 					MessageFactory.toBytes(message)));
 			synchronized(readLock){
 				//wait for notfiy when response comes in on thread
@@ -330,7 +335,7 @@ public class Connection extends Thread {
 //						System.out.println("Pinging Server");
 //					}
 //					pingServer();
-//				}					
+//				}
 			}
 		}
 		if(debug)
@@ -379,7 +384,7 @@ public class Connection extends Thread {
 			paddedData[1 + (16 * i)] ^= (tx) & 0xFF;
 		}
 		/*3*/
-		byte []encData; 
+		byte []encData;
 		try {
 			encData = aes.encrypt(paddedData);
 		} catch (Exception e){
@@ -426,7 +431,7 @@ public class Connection extends Thread {
 		//two packets on the wire, but because the length of the packet
 		//is encrypted we have to peek into the first 16 bytes, decrypt those
 		//bytes and get the length, this makes the following code tricky and
-		//unattractive, 
+		//unattractive,
 		DataInputStream dis = new DataInputStream(is);
 
 		if(debug)
@@ -460,7 +465,7 @@ public class Connection extends Thread {
 		if(start != Message.MESG_START)
 			System.out.println("invalid start char (" + start + ")");
 		//throw new IOException("invalid start char (" + start + ")");
-		if(length < 0) 
+		if(length < 0)
 			throw new IOException("invalid message length (" + length + ")");
 
 
@@ -477,7 +482,7 @@ public class Connection extends Thread {
 			encData = new byte[readLength];
 			//copy the data we already have from decData to decData2
 			System.arraycopy(decData, 0,decData2,0,decData.length);
-			//read the rest 
+			//read the rest
 			dis.readFully(encData);
 			//add decrypted data to the buffer
 			aes.decrypt(encData,0,readLength,decData2,decData.length);
@@ -565,7 +570,7 @@ public class Connection extends Thread {
 			int filter1, int filter2, int filter3) throws IOException, OmniNotConnectedException, OmniInvalidResponseException, OmniUnknownMessageTypeException {
 		Message msg = sendAndReceive(new ReqObjectProperties(objectType, objectNum, direction,
 				filter1, filter2, filter3));
-		if(msg.getMessageType() != Message.MESG_TYPE_OBJ_PROP && msg.getMessageType() 
+		if(msg.getMessageType() != Message.MESG_TYPE_OBJ_PROP && msg.getMessageType()
 				!= Message.MESG_TYPE_END_OF_DATA)
 			throw new OmniInvalidResponseException(msg);
 		return msg;
@@ -779,13 +784,13 @@ public class Connection extends Thread {
 	}
 
 	private void notifyDisconnectHandlers(Exception e){
-		synchronized (disconnectListeners) {	
+		synchronized (disconnectListeners) {
 			for (DisconnectListener l : disconnectListeners) {
 				l.notConnectedEvent(e);
 			}
 		}
 	}
-	
+
 	private class ConnectionWatchdog extends Thread {
 		public void run(){
 			this.setName("ConnectionWatchdog");
@@ -798,14 +803,14 @@ public class Connection extends Thread {
 					try {
 					reqSystemStatus();
 					} catch(Exception ignored){};
-				}					
+				}
 				try {
 					sleep(1000);
 				} catch (InterruptedException e) {}
-			}	
+			}
 		}
 	}
-	
+
 	private class NotificationHandler extends Thread{
 		public void run(){
 			while(connected){
@@ -837,4 +842,3 @@ public class Connection extends Thread {
 	}
 
 }
-

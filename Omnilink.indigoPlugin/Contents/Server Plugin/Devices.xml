@@ -87,18 +87,18 @@
   <ButtonTitle>Close</ButtonTitle>
   <ConfigUI>
     <Field id="explanation" type="label">
-      <Label>Please enter the following information from the Setup menu on your Omni system keypad:</Label>
+      <Label>Please enter the following information from the Setup menu on your Omni system keypad, or from the configuration values you are using for Snap-Link:</Label>
     </Field>
     <Field id="ipAddress" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
-      <Label>IP Address:</Label>
+      <Label>IP or Web Address:</Label>
     </Field>
     <Field id="portNumber" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
       <Label>Port:</Label>
     </Field>
-    <Field id="encryptionKey1" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
+    <Field id="hiddenencryptionKey1" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
       <Label>Encryption Key Part 1:</Label>
     </Field>
-    <Field id="encryptionKey2" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
+    <Field id="hiddenencryptionKey2" type="textfield" enabledBindingId="isConnected" enabledBindingNegate="true">
       <Label>Encryption Key Part 2:</Label>
     </Field>
     <Field id="connect" type="button" enabledBindingId="isConnected" enabledBindingNegate="true">
@@ -111,16 +111,15 @@
     <Field id="connectSuccess" type="label" fontSize="small" alignWithControl="true" visibleBindingId="isConnected" visibleBindingValue="true">
       <Label>Your Omni Controller is communicating with Indigo.</Label>
     </Field>
-    
-    <Field id="deviceFactoryVersion" type="textfield" hidden="true" devaultValue="0.1.0"/>
+
+    <Field id="deviceFactoryVersion" type="textfield" hidden="true" devaultValue="0.3.0"/>
 
     <Field id="isConnected" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="error" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="connectionError" type="checkbox" hidden="true" defaultValue="false"/>
-    <Field id="ipAddressError" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="portNumberError" type="checkbox" hidden="true" defaultValue="false"/>
-    <Field id="encryptionKey1Error" type="checkbox" hidden="true" defaultValue="false"/>
-    <Field id="encryptionKey2Error" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="hiddenencryptionKey1Error" type="checkbox" hidden="true" defaultValue="false"/>
+    <Field id="hiddenencryptionKey2Error" type="checkbox" hidden="true" defaultValue="false"/>
 
     <Field type="separator" id="sep1"/>
 
@@ -131,7 +130,7 @@
       <Label>Device types:</Label>
       <List class="self" method="getDeviceGroupList" dynamicReload="true" />
     </Field>
-    <Field id="addDevices" type="button" enabledBindingId="deviceGroupList" visibleBindingId="error" visibleBindingValue="false"> 
+    <Field id="addDevices" type="button" enabledBindingId="deviceGroupList" visibleBindingId="error" visibleBindingValue="false">
       <Title>Create Selected Device Types</Title>
       <CallbackMethod>createDevices</CallbackMethod>
     </Field>
@@ -143,21 +142,18 @@
     <Field id="connectionErrorMessage" type="label" fontColor="red" visibleBindingId="connectionError" visibleBindingValue="true">
       <Label>Unable to connect with your Omni system. Please recheck the information from the Setup menu, as well as your network cable and firmware version.</Label>
     </Field>
-    <Field id="ipAddressErrorMessage" type="label" fontColor="red" visibleBindingId="ipAddressError" visibleBindingValue="true">
-      <Label>Please enter the controller IP address from the Setup menu on your Omni system keypad.</Label>
-    </Field>
     <Field id="portNumberErrorMessage" type="label" fontColor="red" visibleBindingId="portNumberError" visibleBindingValue="true">
       <Label>Please enter the controller port number from the Setup menu on your Omni system keypad.</Label>
     </Field>
-    <Field id="encryptionKey1ErrorMessage" type="label" fontColor="red" visibleBindingId="encryptionKey1Error" visibleBindingValue="true">
+    <Field id="hiddenencryptionKey1ErrorMessage" type="label" fontColor="red" visibleBindingId="hiddenencryptionKey1Error" visibleBindingValue="true">
       <Label>Please enter the encryption key part 1 from the Setup menu on your Omni system keypad.</Label>
     </Field>
-    <Field id="encryptionKey2ErrorMessage" type="label" fontColor="red" visibleBindingId="encryptionKey2Error" visibleBindingValue="true">
+    <Field id="hiddenencryptionKey2ErrorMessage" type="label" fontColor="red" visibleBindingId="hiddenencryptionKey2Error" visibleBindingValue="true">
       <Label>Please enter the encryption key part 2 from the Setup menu on your Omni system keypad.</Label>
     </Field>
-    
+
     <Field type="separator" id="sep2"/>
-    
+
     <Field id="nameDescription" type="label">
       <Label>Automatically create names for new devices starting with:</Label>
     </Field>
@@ -166,14 +162,236 @@
     </Field>
   </ConfigUI>
 </DeviceFactory>
-<Device type="custom" id="omniZoneDevice">
+
+<Device type="dimmer" id="omniStandardUnit">
+  <Name>Standard X10 Control</Name>
+  <States>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniExtendedUnit">
+  <Name>Extended X10 Control</Name>
+  <States>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniComposeUnit">
+  <Name>Compose X10 Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniUPBUnit">
+  <Name>UPB Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniHLCRoomUnit">
+  <Name>HLC Room Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniHLCLoadUnit">
+  <Name>HLC Load Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniLuminaModeUnit">
+  <Name>Lumina Mode Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniRadioRAUnit">
+  <Name>Radio RA Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniCentraLiteUnit">
+  <Name>CentraLite Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniViziaRFRoomUnit">
+  <Name>Vizia RF Room Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="dimmer" id="omniViziaRFLoadUnit">
+  <Name>Vizia RF Load Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="relay" id="omniFlagUnit">
+  <Name>Omni Controller Flag</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="relay" id="omniVoltageUnit">
+  <Name>Voltage Output Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="relay" id="omniAudioZoneUnit">
+  <Name>Audio Zone Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="relay" id="omniAudioSourceUnit">
+  <Name>Audio Source Control</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name</TriggerLabel>
+      <ControlPageLabel>Name</ControlPageLabel>
+    </State>
+    <State id="timeLeftSeconds">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Last Command Time Left</TriggerLabel>
+      <ControlPageLabel>Last Command Time Left</ControlPageLabel>
+    </State>
+  </States>
+</Device>
+<Device type="sensor" id="omniZoneDevice">
   <Name>Omni II Zone</Name>
   <States>
-    <State id="number">
-      <ValueType>Integer</ValueType>
-      <TriggerLabel>Number:</TriggerLabel>
-      <ControlPageLabel>Number:</ControlPageLabel>
-    </State>
+    <!-- onOffState and sensorValue are inherited from the sensor type device -->
     <State id="name">
       <ValueType>String</ValueType>
       <TriggerLabel>Name:</TriggerLabel>
@@ -204,11 +422,6 @@
       <TriggerLabel>Area:</TriggerLabel>
       <ControlPageLabel>Area:</ControlPageLabel>
     </State>
-    <State id="loop">
-      <ValueType>Integer</ValueType>
-      <TriggerLabel>Analog Loop Reading:</TriggerLabel>
-      <ControlPageLabel>Analog Loop Reading:</ControlPageLabel>
-    </State>
     <State id="condition">
       <ValueType>String</ValueType>
       <TriggerLabel>Condition:</TriggerLabel>
@@ -230,6 +443,6 @@
       <ControlPageLabel>Had Trouble:</ControlPageLabel>
     </State>
   </States>
-  <UiDisplayStateId>condition</UiDisplayStateId>  
+  <UiDisplayStateId>condition</UiDisplayStateId>
 </Device>
 </Devices>
