@@ -17,11 +17,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
 from __future__ import unicode_literals
+from time import sleep
 
 from mock import Mock
 import pytest
 
 import fixtures.jomnilinkII as jomni_mimic
+import fixtures.helpers as helpers
 
 
 def create_unit_devices(plugin, indigo, values, unit_types,
@@ -142,6 +144,7 @@ def test_notification_changes_device_state(
                                           [jomni_mimic.UnitStatus(2, 1, 100)])
 
     omni1._notify("objectStausNotification", status_msg)
+    helpers.run_concurrent_thread(plugin, 1)
 
     assert dev.states["onOffState"]
     assert dev.states["brightnessLevel"] == 1
@@ -166,23 +169,35 @@ def test_disconnect_sets_error_state_of_correct_unit_device(
 
     omni2._disconnect("notConnectedEvent", Mock())
 
+    helpers.run_concurrent_thread(plugin, 1)
+
     for dev in unit_devices:
         assert dev.error_state is None
     for dev in unit_devices_2:
         assert dev.error_state is not None
 
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
 
 def test_reconnect_notification_clears_device_error_state(
-        plugin, indigo, unit_devices, omni1):
+        plugin, indigo, unit_devices, omni1, patched_datetime):
 
     for dev in unit_devices:
         plugin.deviceStartComm(dev)
 
     omni1.connected.return_value = False
     omni1._disconnect("notConnectedEvent", Mock())
+    helpers.run_concurrent_thread(plugin, 1)
 
     assert dev.error_state is not None
-    plugin.update()  # this should get the second connection object
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+    patched_datetime.fast_forward(minutes=2)
+    sleep(0.1)
+    helpers.run_concurrent_thread(plugin, 1)
+
     assert dev.error_state is None
 
 

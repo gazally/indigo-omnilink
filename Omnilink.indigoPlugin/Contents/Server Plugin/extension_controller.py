@@ -302,7 +302,7 @@ class ControllerExtension(extensions.PluginExtension):
 
         self.update_device_status(dev)
 
-    def reconnect_notification(self, connection):
+    def reconnect_notification(self, connection, omni):
         """ Callback used by plugin when successful reconnection
         is made to the Omni controller. Refresh device states.
         """

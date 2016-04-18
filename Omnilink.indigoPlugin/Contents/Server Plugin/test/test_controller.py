@@ -17,10 +17,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
 from __future__ import unicode_literals
+from time import sleep
 
 from mock import Mock
 import pytest
 
+import fixtures.helpers as helpers
 import fixtures.jomnilinkII as jomni_mimic
 from fixtures.omni import omni1_system_messages_asserts
 from fixtures.omni import omni2_system_messages_asserts
@@ -160,23 +162,44 @@ def test_disconnect_notification_sets_error_state_of_correct_controller(
 
     plugin.deviceStartComm(second_controller_device)
     omni2._disconnect("notConnectedEvent", Mock())
+    helpers.run_concurrent_thread(plugin, 1)
 
     assert started_controller_device.error_state is None
     assert second_controller_device.error_state is not None
 
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
 
 def test_reconnect_notification_clears_device_error_state(
-        plugin, started_controller_device, omni1, omni2):
+        plugin, started_controller_device, omni1, omni2,
+        patched_datetime):
 
+    # make sure controller device is running and updated
     omni1_system_messages_asserts(started_controller_device)
+    helpers.run_concurrent_thread(plugin, 1)
+
+    # make the mock jomnilinkII.Connection disconnect
     omni1.connected.return_value = False
     omni1._disconnect("notConnectedEvent", Mock())
 
-    assert started_controller_device.error_state is not None
+    # and let the disconnect message get processed
+    helpers.run_concurrent_thread(plugin, 1)
 
-    # plugin should now try to reconnect, and jomnilinkII
-    # will give it omni2
-    plugin.update()
+    # now the device should be in the error state
+    assert started_controller_device.error_state is not None
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+    # let the disconnect message get processed
+    patched_datetime.fast_forward(minutes=2)
+
+    # allow time for the thread to run by using the real sleep,
+    # not the patched one in the plugin
+    sleep(0.1)
+
+    # let the reconnect message get processed
+    helpers.run_concurrent_thread(plugin, 1)
 
     assert started_controller_device.error_state is None
     omni2_system_messages_asserts(started_controller_device)
@@ -275,7 +298,8 @@ def test_trigger_processing_succeeds_with_valid_trigger(
 
 def test_other_event_notification_executes_trigger(
         plugin, omni1, indigo, trigger, trigger_event):
-    omni1._notify("otherEventNotification", trigger_event),
+    omni1._notify("otherEventNotification", trigger_event)
+    helpers.run_concurrent_thread(plugin, 1)
     assert indigo.trigger.execute.called
 
 
@@ -285,6 +309,7 @@ def test_other_event_notification_updates_device_state(
     assert started_controller_device.states["batteryLowTrouble"]
 
     omni1._notify("otherEventNotification", trigger_event)
+    helpers.run_concurrent_thread(plugin, 1)
 
     assert not started_controller_device.states["batteryLowTrouble"]
 
@@ -294,6 +319,7 @@ def test_other_event_notification_ignores_unknown_message(
         trigger_non_event):
 
     omni1._notify("otherEventNotification", trigger_non_event)
+    helpers.run_concurrent_thread(plugin, 1)
 
     assert not indigo.trigger.execute.called
 
@@ -304,6 +330,7 @@ def test_other_event_notification_ignores_message_for_stopped_device(
     plugin.deviceStopComm(started_controller_device)
 
     omni1._notify("otherEventNotification", trigger_event)
+    helpers.run_concurrent_thread(plugin, 1)
 
     assert not indigo.trigger.execute.called
 

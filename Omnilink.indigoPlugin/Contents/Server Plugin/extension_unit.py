@@ -220,7 +220,7 @@ class ControlUnitExtension(extensions.PluginExtension):
                 if dev.pluginProps["number"] == number:
                     self.update_device_from_status(dev, status)
 
-    def reconnect_notification(self, connection):
+    def reconnect_notification(self, connection, omni):
         for dev in self.devices_from_url(connection.url):
             self.update_device_status(dev)
 

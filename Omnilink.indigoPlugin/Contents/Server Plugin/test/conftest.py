@@ -21,6 +21,7 @@ import pytest
 from fixtures.device_factory import *
 from fixtures.indigo_mockup import *
 from fixtures.imports import *
+from fixtures.helpers import *
 from fixtures.create_plugin import *
 from fixtures.jomnilinkII import *
 from fixtures.omni import *

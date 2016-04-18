@@ -93,4 +93,5 @@ def connection(plugin_module):
     plugin_module.Connection = connection.Connection
     plugin_module.ConnectionError = connection.ConnectionError
     assert connection.Connection.gateway is None
+    assert not connection.Connection.threads
     return connection

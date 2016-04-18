@@ -152,9 +152,6 @@ def test_make_connection_sets_error_state_on_invalid_input(
 
     values = plugin.makeConnection(values, [])
 
-    print(values)
-    print(errorkeys)
-
     assert values["error"]
     for k in errorkeys:
         assert values[k + "Error"]

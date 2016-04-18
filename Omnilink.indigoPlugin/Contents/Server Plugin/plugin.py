@@ -26,7 +26,6 @@ import imp
 import logging
 import os
 import re
-import subprocess
 import threading
 
 import indigo
@@ -63,7 +62,6 @@ class Plugin(indigo.PluginBase):
         self.debug = prefs.get("showDebugInfo", False)
         self.debug_omni = prefs.get("showJomnilinkIIDebugInfo", False)
         self.configure_logging()
-
         if (StrictVersion(prefs.get("configVersion", "0.0")) <
                 StrictVersion(version)):
             log.debug("Updating config version to " + version)
@@ -94,8 +92,8 @@ class Plugin(indigo.PluginBase):
         Connection.shutdown()
 
     def update(self):
-        for connection in self.connections.values():
-            connection.update()
+        for conn in self.connections.values():
+            conn.update()
         for ext in self.extensions:
             ext.update()
 
@@ -159,10 +157,10 @@ class Plugin(indigo.PluginBase):
                 for type_id in type_ids:
                     self.type_ids_map[thing][type_id] = ext
 
-        self.notifications["status"].append(ext.status_notification)
-        self.notifications["event"].append(ext.event_notification)
-        self.notifications["disconnect"].append(ext.disconnect_notification)
-        self.notifications["reconnect"].append(ext.reconnect_notification)
+        for ntype in ["status", "event", "disconnect", "reconnect"]:
+            method = ntype + "_notification"
+            if hasattr(ext, method):
+                self.notifications[ntype].append(getattr(ext, method))
 
     # ----- Management of Connection objects ----- #
 
@@ -481,7 +479,7 @@ class Plugin(indigo.PluginBase):
         """
         for dev_type in values["deviceGroupList"]:
             ext = self.type_ids_map["device"][dev_type]
-            props = {"url" : self.make_url(values),
+            props = {"url": self.make_url(values),
                      "prefix": values["prefix"]}
             ext.createDevices(dev_type, props, values["prefix"], dev_ids)
         return values

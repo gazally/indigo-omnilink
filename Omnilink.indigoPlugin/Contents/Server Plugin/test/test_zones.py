@@ -17,12 +17,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
 from __future__ import unicode_literals
+from time import sleep
 
+from mock import Mock
 import pytest
 
-from mock import Mock, MagicMock
-
 import fixtures.jomnilinkII as jomni_mimic
+import fixtures.helpers as helpers
 
 
 def create_zone_devices(plugin, indigo, values, device_connection_props):
@@ -140,6 +141,7 @@ def test_notification_changes_device_state(plugin, indigo, zone_devices,
                                           [jomni_mimic.ZoneStatus(1, 1, 100)])
 
     omni1._notify("objectStausNotification", status_msg)
+    helpers.run_concurrent_thread(plugin, 1)
 
     assert dev.states["condition"] == "Not Ready"
     assert not dev.states["onOffState"]
@@ -152,7 +154,10 @@ def test_notification_ignores_non_zone_notifications(plugin, indigo, omni1,
                                           [jomni_mimic.ZoneStatus(1, 1, 100)])
     dev = indigo.devices["Front Door"]
     plugin.deviceStartComm(dev)
+
     omni1._notify("objectStausNotification", status_msg)
+    helpers.run_concurrent_thread(plugin, 1)
+
     assert dev.states["condition"] == "Secure"
 
 
@@ -167,23 +172,45 @@ def test_disconnect_notification_sets_error_state_of_correct_zone_device(
 
     omni2._disconnect("notConnectedEvent", Mock())
 
+    helpers.run_concurrent_thread(plugin, 1)
+
     for dev in zone_devices:
         assert dev.error_state is None
     for dev in zone_devices_2:
         assert dev.error_state is not None
 
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
 
-def test_reconnect_notification_clears_device_error_state(plugin, indigo,
-                                                          zone_devices, omni1):
+
+def test_reconnect_notification_clears_device_error_state(
+        plugin, indigo, zone_devices, omni1, patched_datetime):
     for dev in zone_devices:
         plugin.deviceStartComm(dev)
 
+    # make the mock jomnilinkII.Connection disconnect
     omni1.connected.return_value = False
     omni1._disconnect("notConnectedEvent", Mock())
 
+    # and let the disconnect message get processed
+    helpers.run_concurrent_thread(plugin, 1)
+
+    # now the device should be in the error state
     for dev in zone_devices:
         assert dev.error_state is not None
-    plugin.update()  # this should get the second connection object
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+    # let the disconnect message get processed
+    patched_datetime.fast_forward(minutes=2)
+
+    # allow time for the thread to run by using the real sleep,
+    # not the patched one in the plugin
+    sleep(0.1)
+
+    # let the reconnect message get processed
+    helpers.run_concurrent_thread(plugin, 1)
+
     for dev in zone_devices:
         assert dev.error_state is None
 

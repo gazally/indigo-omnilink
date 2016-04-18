@@ -15,6 +15,10 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+""" Miscellaneous test fixtures for Omni Link plugin unit tests """
+from datetime import datetime, timedelta
+
+import pytest
 
 
 class TestException(Exception):
@@ -35,3 +39,34 @@ def run_concurrent_thread(plugin, time_limit):
 
     plugin.sleep = sleep
     plugin.runConcurrentThread()
+
+
+class PatchableDatetime(datetime):
+    """ A replacement for datetime that replaces datetime.now() """
+    not_the_actual_time = datetime(2011, 10, 9, 8, 7, 6)
+
+    def __new__(cls, *args, **kwargs):
+        return datetime.__new__(datetime, *args, **kwargs)
+
+    @classmethod
+    def set_now_for_test(cls, dt):
+        cls.not_the_actual_time = dt
+
+    @classmethod
+    def fast_forward(cls, *args, **kwargs):
+        td = timedelta(*args, **kwargs)
+        cls.not_the_actual_time += td
+
+    @classmethod
+    def now(cls):
+        return cls.not_the_actual_time
+
+
+@pytest.fixture
+def patched_datetime(monkeypatch):
+    """ Patch datetime.datetime with a fake datetime class with these methods:
+    patched_datetime.set_now_for_test(dt) - set a the next return value for now
+    fast_forward(timedelta) - move now ahead by timedelta
+    """
+    monkeypatch.setattr("datetime.datetime", PatchableDatetime)
+    return PatchableDatetime
