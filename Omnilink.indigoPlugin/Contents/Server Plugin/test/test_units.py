@@ -27,7 +27,7 @@ import fixtures.jomnilinkII as jomni_mimic
 def create_unit_devices(plugin, indigo, values, unit_types,
                         device_connection_props):
     values = plugin.makeConnection(values, [])
-    values["deviceGroupList"] = ["omniStandardX10Unit", "omniRadioRAUnit",
+    values["deviceGroupList"] = ["omniStandardUnit", "omniRadioRAUnit",
                                  "omniFlagUnit", "omniVoltageUnit"]
     values["prefix"] = "test"
     plugin.createDevices(

@@ -36,9 +36,9 @@ _VERSION = "0.1.0"
 class ControlUnitExtension(extensions.PluginExtension):
     """Omni plugin extension for Control Units """
     device_types = {
-        1: ("omniStandardX10Unit",  "Standard X10 Control"),
-        2: ("omniExtendedX10Unit",  "Extended X10 Control"),
-        3: ("omniComposeX10Unit",   "Compose X10 Control"),
+        1: ("omniStandardUnit",     "Standard Control"),
+        2: ("omniExtendedUnit",     "Extended Control"),
+        3: ("omniComposeUnit",      "Compose Control"),
         4: ("omniUPBUnit",          "UPB Control"),
         5: ("omniHLCRoomUnit",      "HLC Room Control"),
         6: ("omniHLCLoadUnit",      "HLC Load Control"),

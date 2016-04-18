@@ -324,4 +324,4 @@ def omni_unit_statuses(jomnilinkII_message):
 @pytest.fixture(scope="session")
 def omni_unit_types():
     """ Return a list of the device types corresponding to omni_unit_props. """
-    return ["omniStandardX10Unit", "omniRadioRAUnit", "omniVoltageUnit"]
+    return ["omniStandardUnit", "omniRadioRAUnit", "omniVoltageUnit"]
