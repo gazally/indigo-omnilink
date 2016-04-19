@@ -12,7 +12,7 @@
     <Label>Omni Network Communication:</Label>
     <Description>(not recommended)</Description>
   </Field>
-  <Field id="configVersion" type="textfield" hidden="true" defaultValue="0.1.0">
+  <Field id="configVersion" type="textfield" hidden="true" defaultValue="0.3.0">
     <Label>Hidden config version</Label>
   </Field>
   <Field id="sep3" type="separator"/>

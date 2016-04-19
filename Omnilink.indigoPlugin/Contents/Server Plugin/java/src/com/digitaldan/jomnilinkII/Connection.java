@@ -96,8 +96,8 @@ public class Connection extends Thread {
 	public static int OMNI_TO = 60 * 5 * 1000;
 	//Keep alive time, omni timeout minus one minute
 	public static int PING_TO = OMNI_TO - (1000 * 60);
-	//But give up after 5 sec if no response at first connection
-	public static int OMNI_INITIAL_TO = 5 * 1000;
+	//But give up after 10 sec if no response at first connection
+	public static int OMNI_INITIAL_TO = 10 * 1000;
 
 	public boolean debug;
 	private boolean connected;

@@ -31,7 +31,7 @@ import extensions
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.2.0"
+_VERSION = "0.3.0"
 
 # to do -- update the battery reading periodically (like once a day)
 # action - set time in controller automatically

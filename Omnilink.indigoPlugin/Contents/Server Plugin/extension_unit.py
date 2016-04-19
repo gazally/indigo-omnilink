@@ -30,7 +30,7 @@ from connection import ConnectionError
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.1.0"
+_VERSION = "0.3.0"
 
 
 class ControlUnitExtension(extensions.PluginExtension):
