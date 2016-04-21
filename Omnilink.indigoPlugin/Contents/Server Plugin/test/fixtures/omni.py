@@ -19,6 +19,7 @@
 via the jomnilinkII library. """
 from __future__ import print_function
 from __future__ import unicode_literals
+import itertools
 
 from mock import Mock
 import jomnilinkII as jomni_mimic
@@ -97,21 +98,15 @@ def omni2(omnis):
     return omnis[1]
 
 
-def repeat_endlessly(things):
-    i = 0
-    while True:
-        yield things[i % len(things)]
-        i += 1
-
-
 @pytest.fixture
-def req_object_properties(omni_zone_props, omni_unit_props, omni_end_of_data,
-                          jomnilinkII_message):
+def req_object_properties(omni_zone_props, omni_unit_props, omni_area_props,
+                          omni_end_of_data, jomnilinkII_message):
     """ Return a stand-in for jomnilinkII.Connection.reqObjectProperties """
 
-    zones = repeat_endlessly(omni_zone_props + [omni_end_of_data])
-    units = repeat_endlessly(omni_unit_props + [omni_end_of_data])
-    other = repeat_endlessly(
+    zones = itertools.cycle(omni_zone_props + [omni_end_of_data])
+    units = itertools.cycle(omni_unit_props + [omni_end_of_data])
+    areas = itertools.cycle(omni_area_props + [omni_end_of_data])
+    other = itertools.cycle(
         [jomni_mimic.ObjectProperties(Mock(), "test", 1,
                                       jomnilinkII_message.MESG_TYPE_OBJ_PROP),
          omni_end_of_data])
@@ -121,6 +116,8 @@ def req_object_properties(omni_zone_props, omni_unit_props, omni_end_of_data,
             return next(zones)
         elif mtype == jomnilinkII_message.OBJ_TYPE_UNIT:
             return next(units)
+        elif mtype == jomnilinkII_message.OBJ_TYPE_AREA:
+            return next(areas)
         else:
             return next(other)
 
@@ -128,9 +125,11 @@ def req_object_properties(omni_zone_props, omni_unit_props, omni_end_of_data,
 
 
 @pytest.fixture
-def req_object_status(jomnilinkII_message, omni_unit_statuses):
+def req_object_status(jomnilinkII_message, omni_unit_statuses,
+                      omni_area_statuses):
     """ Return a stand-in for jomnilinkII.Connection.reqObjectStatus. """
-    unit_statuses = repeat_endlessly(omni_unit_statuses)
+    unit_statuses = itertools.cycle(omni_unit_statuses)
+    area_statuses = itertools.cycle(omni_area_statuses)
 
     def reqfunc(mtype, x, y):
         if mtype == jomnilinkII_message.OBJ_TYPE_ZONE:
@@ -140,6 +139,8 @@ def req_object_status(jomnilinkII_message, omni_unit_statuses):
 
         elif mtype == jomnilinkII_message.OBJ_TYPE_UNIT:
             return next(unit_statuses)
+        elif mtype == jomnilinkII_message.OBJ_TYPE_AREA:
+            return next(area_statuses)
         else:
             return jomni_mimic.ObjectStatus(Mock(), [Mock()])
     return reqfunc
@@ -325,3 +326,33 @@ def omni_unit_statuses(jomnilinkII_message):
 def omni_unit_types():
     """ Return a list of the device types corresponding to omni_unit_props. """
     return ["omniStandardUnit", "omniRadioRAUnit", "omniVoltageUnit"]
+
+@pytest.fixture
+def omni_area_props(jomnilinkII_message):
+    mtype = jomnilinkII_message.MESG_TYPE_OBJ_PROP
+    return [jomni_mimic.AreaProperties(mtype, "First Area", 1, 10, 20, True),
+            jomni_mimic.AreaProperties(mtype, "", 2, 30, 40, True),
+            jomni_mimic.AreaProperties(mtype, "", 3, 0, 0, False)]
+
+
+@pytest.fixture(scope="session")
+def req_object_props_area_states():
+    """ Return a dictionary containing the device states that match
+    the omni_area_props fixture.
+    """
+    return {"First Area": {"name": "First Area",
+                           "entryDelay": 10,
+                           "exitDelay": 20},
+            "Area 2": {"name": "Area 2",
+                       "entryDelay": 30,
+                       "exitDelay": 40}}
+
+
+@pytest.fixture
+def omni_area_statuses(jomnilinkII_message):
+    return [jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_AREA,
+                                     [jomni_mimic.AreaStatus(1, 0, 6, 0, 0)]),
+            jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_AREA,
+                                     [jomni_mimic.AreaStatus(2, 12, 0, 10, 10)]),
+            jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_AREA,
+                                     [jomni_mimic.AreaStatus(3, 2, 0, 0, 0)])]

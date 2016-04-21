@@ -1,5 +1,10 @@
 all: MenuItems.xml Actions.xml Devices.xml Events.xml
 
+.PHONY: clean
+
+clean:
+	-rm MenuItems.xml Actions.xml Devices.xml Events.xml
+
 ifneq ($(wildcard Device_*.xml),)
 Devices.xml: Device_*.xml
 	echo '<?xml version="1.0"?>' > Devices.xml
@@ -31,4 +36,3 @@ Events.xml: Event_*.xml
 	cat Event_*.xml >> Events.xml
 	echo '</Events>' >> Events.xml
 endif
-

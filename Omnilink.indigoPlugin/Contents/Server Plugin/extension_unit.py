@@ -163,7 +163,7 @@ class ControlUnitExtension(extensions.PluginExtension):
             unit_info = self.unit_info(dev.pluginProps["url"])
             method(action, dev, unit_num, unit_info)
             indigo.server.log('sent "{0}" {1} request'.format(dev.name, text))
-        except Py4JError, ConnectionError:
+        except (Py4JError, ConnectionError):
             log.error('send "{0}" {1} request failed'.format(dev.name, text))
             log.debug("", exc_info=True)
 
@@ -213,7 +213,7 @@ class ControlUnitExtension(extensions.PluginExtension):
             unit_info = self.unit_info(connection.url)
             number, status = unit_info.number_and_status_from_notification(
                 status_msg)
-        except Py4JError, ConnectionError:
+        except (Py4JError, ConnectionError):
             log.debug("status_notification exception in Unit", exc_info=True)
         else:
             for dev in self.devices_from_url(connection.url):

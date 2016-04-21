@@ -56,10 +56,10 @@ Isn't Python wonderful?
             return getattr(self, argname)
         return method
 
-    for name in argnames:
-        setattr(Result, "get" + name, make_method(name))
-    for name in flagnames:
-        setattr(Result, "is" + name, make_method(name))
+    for n in argnames:
+        setattr(Result, "get" + n, make_method(n))
+    for n in flagnames:
+        setattr(Result, "is" + n, make_method(n))
     Result.__name__ = name
     return Result
 
@@ -87,6 +87,10 @@ UnitProperties = build_java_class_mimic(
     "UnitProperties",
     ["MessageType", "Name", "Number", "UnitType"])
 
+AreaProperties = build_java_class_mimic(
+    "AreaProperties",
+    ["MessageType", "Name", "Number", "EntryDelay", "ExitDelay"], ["Enabled"])
+
 EndOfData = build_java_class_mimic("EndOfData", ["MessageType"])
 
 ObjectStatus = build_java_class_mimic(
@@ -100,6 +104,10 @@ ZoneStatus = build_java_class_mimic(
 UnitStatus = build_java_class_mimic(
     "UnitStatus",
     ["Number", "Status", "Time"])
+
+AreaStatus = build_java_class_mimic(
+    "AreaStatus",
+    ["Number", "Mode", "Alarms", "EntryTimer", "ExitTimer"])
 
 SecurityCodeValidation = build_java_class_mimic(
     "SecurityCodeValidation",

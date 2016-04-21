@@ -1,0 +1,76 @@
+<Device type="custom" id="omniAreaDevice">
+  <Name>Omni II Area</Name>
+  <States>
+    <State id="name">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Name:</TriggerLabel>
+      <ControlPageLabel>Name:</ControlPageLabel>
+    </State>
+    <State id="entryDelay">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Entry Delay:</TriggerLabel>
+      <ControlPageLabel>Entry Delay:</ControlPageLabel>
+    </State>
+    <State id="exitDelay">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Exit Delay:</TriggerLabel>
+      <ControlPageLabel>Exit Delay:</ControlPageLabel>
+    </State>
+    <State id="entryTimer">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Entry Timer:</TriggerLabel>
+      <ControlPageLabel>Entry Timer:</ControlPageLabel>
+    </State>
+    <State id="exitTimer">
+      <ValueType>Integer</ValueType>
+      <TriggerLabel>Exit Timer:</TriggerLabel>
+      <ControlPageLabel>Exit Timer:</ControlPageLabel>
+    </State>
+    <State id="mode">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Mode:</TriggerLabel>
+      <ControlPageLabel>Mode:</ControlPageLabel>
+    </State>
+    <State id="alarmBurglary">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Burglary Alarm:</TriggerLabel>
+      <ControlPageLabel>Burglary Alarm:</ControlPageLabel>
+    </State>
+    <State id="alarmFire">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Fire Alarm:</TriggerLabel>
+      <ControlPageLabel>Fire Alarm:</ControlPageLabel>
+    </State>
+    <State id="alarmGas">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Gas Alarm:</TriggerLabel>
+      <ControlPageLabel>Gas Alarm:</ControlPageLabel>
+    </State>
+    <State id="alarmAuxiliary">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Auxiliary Alarm:</TriggerLabel>
+      <ControlPageLabel>Auxiliary Alarm:</ControlPageLabel>
+    </State>
+    <State id="alarmFreeze">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Freeze Alarm:</TriggerLabel>
+      <ControlPageLabel>Freeze Alarm:</ControlPageLabel>
+    </State>
+    <State id="alarmWater">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Water Alarm:</TriggerLabel>
+      <ControlPageLabel>Water Alarm:</ControlPageLabel>
+    </State>
+    <State id="alarmDuress">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Duress Alarm:</TriggerLabel>
+      <ControlPageLabel>Duress Alarm:</ControlPageLabel>
+    </State>
+    <State id="alarmTemperature">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Temperature Alarm:</TriggerLabel>
+      <ControlPageLabel>Temperature Alarm:</ControlPageLabel>
+    </State>
+  </States>
+  <UiDisplayStateId>Mode</UiDisplayStateId>
+</Device>
