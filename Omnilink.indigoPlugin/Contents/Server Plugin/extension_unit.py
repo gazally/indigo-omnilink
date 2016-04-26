@@ -179,7 +179,7 @@ class UnitInfo(extensions.Info):
         """
         cmd = getattr(self.connection.jomnilinkII.MessageTypes.CommandMessage,
                       cmd_name)
-        self.connection.omni.controllerCommand(cmd, unit_num, parameter)
+        self.connection.omni.controllerCommand(cmd, parameter, unit_num)
 
     def report(self, report_name, say):
         items = sorted(self.props.items())
