@@ -163,7 +163,7 @@ class ControlUnitExtension(extensions.PluginExtension):
             unit_info = self.unit_info(dev.pluginProps["url"])
             method(action, dev, unit_num, unit_info)
             indigo.server.log('sent "{0}" {1} request'.format(dev.name, text))
-        except Py4JError, ConnectionError:
+        except (Py4JError, ConnectionError):
             log.error('send "{0}" {1} request failed'.format(dev.name, text))
             log.debug("", exc_info=True)
 
@@ -371,7 +371,7 @@ class UnitInfo(object):
         """
         cmd = getattr(self.connection.jomnilinkII.MessageTypes.CommandMessage,
                       cmd_name)
-        self.connection.omni.controllerCommand(cmd, unit_num, parameter)
+        self.connection.omni.controllerCommand(cmd, parameter, unit_num)
 
     def report(self, say):
         items = sorted(self.unit_props.items())
