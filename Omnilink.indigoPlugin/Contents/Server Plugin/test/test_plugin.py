@@ -128,7 +128,7 @@ def test_device_factory_uivalidation_fails_invalid_input(
         assert k in e
 
 
-def test_make_connection_clears_error_state_on_valid_input(
+def test_make_connection_clears_errorState_on_valid_input(
         plugin, device_factory_fields):
     values = dict(device_factory_fields)
     errors = {"portNumberError": True,
@@ -146,7 +146,7 @@ def test_make_connection_clears_error_state_on_valid_input(
     assert values["isConnected"]
 
 
-def test_make_connection_sets_error_state_on_invalid_input(
+def test_make_connection_sets_errorState_on_invalid_input(
         plugin, invalid_device_factory_fields):
     values, errorkeys = invalid_device_factory_fields
 
@@ -158,7 +158,7 @@ def test_make_connection_sets_error_state_on_invalid_input(
     assert not values["isConnected"]
 
 
-def test_make_connection_sets_error_state_on_failure_to_connect(
+def test_make_connection_sets_errorState_on_failure_to_connect(
         plugin, py4j, jomnilinkII, device_factory_fields,
         invalid_device_factory_fields):
     jomnilinkII.Connection.side_effect = py4j.protocol.Py4JJavaError("test")

@@ -124,13 +124,11 @@ def test_create_devices_creates_only_one_controller(indigo, plugin,
 
 def test_device_start_comm_fails_on_network_error(plugin_module, plugin,
                                                   controller_device, omni1):
-    omni1.reqSystemInformation.side_effect = plugin_module.ConnectionError
+    omni1.reqSystemStatus.side_effect = plugin_module.ConnectionError
 
     plugin.deviceStartComm(controller_device)
 
-    assert controller_device.error_state is not None
-    assert plugin.errorLog.called
-    plugin.errorLog.reset_mock()
+    assert controller_device.errorState is not None
 
 
 def test_device_start_comm_succeeds(plugin, controller_device,
@@ -157,21 +155,21 @@ def test_device_stop_comm_succeeds(plugin, controller_device):
     plugin.deviceStopComm(controller_device)
 
 
-def test_disconnect_notification_sets_error_state_of_correct_controller(
+def test_disconnect_notification_sets_errorState_of_correct_controller(
         plugin, started_controller_device, second_controller_device, omni2):
 
     plugin.deviceStartComm(second_controller_device)
     omni2._disconnect("notConnectedEvent", Mock())
     helpers.run_concurrent_thread(plugin, 1)
 
-    assert started_controller_device.error_state is None
-    assert second_controller_device.error_state is not None
+    assert started_controller_device.errorState is None
+    assert second_controller_device.errorState is not None
 
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
 
 
-def test_reconnect_notification_clears_device_error_state(
+def test_reconnect_notification_clears_device_errorState(
         plugin, started_controller_device, omni1, omni2,
         patched_datetime):
 
@@ -187,7 +185,7 @@ def test_reconnect_notification_clears_device_error_state(
     helpers.run_concurrent_thread(plugin, 1)
 
     # now the device should be in the error state
-    assert started_controller_device.error_state is not None
+    assert started_controller_device.errorState is not None
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
 
@@ -201,8 +199,7 @@ def test_reconnect_notification_clears_device_error_state(
     # let the reconnect message get processed
     helpers.run_concurrent_thread(plugin, 1)
 
-    assert started_controller_device.error_state is None
-    omni2_system_messages_asserts(started_controller_device)
+    assert started_controller_device.errorState is None
 
 
 def test_validate_action_config_ui_uses_substitute_check(

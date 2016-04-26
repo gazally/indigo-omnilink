@@ -97,7 +97,7 @@ def test_device_start_comm_succeeds_on_valid_input(
         plugin.deviceStartComm(dev)
 
     for dev in zone_devices:
-        assert dev.error_state is None
+        assert dev.errorState is None
         right_answers = req_object_props_zone_states[dev.name]
         for k, v in right_answers.items():
             assert dev.states[k] == v
@@ -113,13 +113,13 @@ def test_device_start_comm_wont_start_old_device(indigo, plugin, zone_devices):
     plugin.errorLog.reset_mock()
 
 
-def test_device_start_comm_sets_error_state_on_connection_error(
+def test_device_start_comm_sets_errorState_on_connection_error(
         indigo, py4j, plugin, omni1, zone_devices):
     dev = indigo.devices["Smoke Det"]
     omni1.reqObjectStatus.side_effect = py4j.protocol.Py4JError
 
     plugin.deviceStartComm(dev)
-    assert dev.error_state is not None
+    assert dev.errorState is not None
 
 
 def test_remove_devices_removes_zone_devices(plugin, indigo, zone_devices,
@@ -145,7 +145,7 @@ def test_notification_changes_device_state(plugin, indigo, zone_devices,
 
     assert dev.states["condition"] == "Not Ready"
     assert not dev.states["onOffState"]
-    assert dev.error_state is None
+    assert dev.errorState is None
 
 
 def test_notification_ignores_non_zone_notifications(plugin, indigo, omni1,
@@ -161,7 +161,7 @@ def test_notification_ignores_non_zone_notifications(plugin, indigo, omni1,
     assert dev.states["condition"] == "Secure"
 
 
-def test_disconnect_notification_sets_error_state_of_correct_zone_device(
+def test_disconnect_notification_sets_errorState_of_correct_zone_device(
         plugin, indigo, zone_devices, device_factory_fields,
         omni2, zone_devices_2, device_factory_fields_2):
 
@@ -175,15 +175,15 @@ def test_disconnect_notification_sets_error_state_of_correct_zone_device(
     helpers.run_concurrent_thread(plugin, 1)
 
     for dev in zone_devices:
-        assert dev.error_state is None
+        assert dev.errorState is None
     for dev in zone_devices_2:
-        assert dev.error_state is not None
+        assert dev.errorState is not None
 
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
 
 
-def test_reconnect_notification_clears_device_error_state(
+def test_reconnect_notification_clears_device_errorState(
         plugin, indigo, zone_devices, omni1, patched_datetime):
     for dev in zone_devices:
         plugin.deviceStartComm(dev)
@@ -197,7 +197,7 @@ def test_reconnect_notification_clears_device_error_state(
 
     # now the device should be in the error state
     for dev in zone_devices:
-        assert dev.error_state is not None
+        assert dev.errorState is not None
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
 
@@ -212,7 +212,7 @@ def test_reconnect_notification_clears_device_error_state(
     helpers.run_concurrent_thread(plugin, 1)
 
     for dev in zone_devices:
-        assert dev.error_state is None
+        assert dev.errorState is None
 
 
 def test_zone_extension_logs_error_on_unimplemented_sensor_change(
@@ -266,7 +266,7 @@ def test_request_status_action_logs_error_on_connection_error(
     omni1.reqObjectStatus.side_effect = py4j.protocol.Py4JError
 
     plugin.actionControlGeneral(action, dev)
-    assert dev.error_state is not None
+    assert dev.errorState is not None
 
 
 def test_device_stop_comm_succeeds(indigo, plugin, zone_devices):

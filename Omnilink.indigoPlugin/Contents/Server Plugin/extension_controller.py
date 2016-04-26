@@ -18,7 +18,7 @@
 
 """ Omni Plugin extension for Controller Devices """
 from __future__ import unicode_literals
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 from datetime import time, datetime
 from distutils.version import StrictVersion
 import logging
@@ -31,7 +31,7 @@ import extensions
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.3.0"
+_VERSION = "0.4.0"
 
 # to do -- update the battery reading periodically (like once a day)
 # action - set time in controller automatically
@@ -39,7 +39,7 @@ _VERSION = "0.3.0"
 # action - acknowledge troubles
 
 
-class ControllerExtension(extensions.PluginExtension):
+class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
     """Omni plugin extension for Controller devices """
     def __init__(self):
         self.type_ids = {"device": ["omniControllerDevice"],
@@ -55,12 +55,6 @@ class ControllerExtension(extensions.PluginExtension):
                                    "digitalCommunicatorModuleOK",
                                    "energyCostLow", "energyCostMid",
                                    "energyCostHigh", "energyCostCritical"]}
-        self.device_ids = []
-
-        # for each device contains a dict
-        # which maps event type -> list of triggers
-        self.triggers = {}
-
         self.callbacks = {
             "checkSecurityCode": self.checkSecurityCode,
             "generateConsoleList": self.generateConsoleList,
@@ -69,30 +63,7 @@ class ControllerExtension(extensions.PluginExtension):
             "sendBeepCommand": self.sendBeepCommand
         }
 
-        self.reports = {"System Information": self.say_system_information,
-                        "System Troubles": self.say_system_troubles,
-                        "System Capacities": self.say_system_capacities,
-                        "Event Log": self.say_event_log}
-
-        self.controller_info = {}
-
-    # ----- Device Start and Stop Methods ----- #
-
-    def deviceStartComm(self, device):
-        """ start an omniControllerDevice. Query the Omni system and set
-        the states of the indigo device. """
-        log.debug('Starting device "{0}"'.format(device.name))
-        if device not in self.device_ids:
-            self.device_ids.append(device.id)
-            self.triggers[device.id] = defaultdict(list)
-            self.update_device_version(device)
-            self.update_device_status(device)
-
-    def deviceStopComm(self, device):
-        if device.id in self.device_ids:
-            log.debug('Stopping device "{0}"'.format(device.name))
-            self.device_ids.remove(device.id)
-            del self.triggers[device.id]
+        extensions.DeviceMixin.__init__(self, ControllerInfo, log)
 
     # ----- Maintenance of device states ----- #
 
@@ -114,32 +85,12 @@ class ControllerExtension(extensions.PluginExtension):
         # device.pluginProps always creates a copy of itself
         props = device.pluginProps
         props["deviceVersion"] = _VERSION
+        props["number"] = 1
         device.replacePluginPropsOnServer(props)
 
-    def update_device_status(self, device):
-        """ Ask the controller for information and set the
-        device states accordingly, and clear the last checked
-        security code.
-        """
-        connection = self.plugin.make_connection(device.pluginProps["url"])
-        try:
-            info = self.get_controller_info(connection)
-            device.updateStateOnServer("connected", True)
-            device.updateStateOnServer("model", info.model)
-            device.updateStateOnServer("firmwareVersion", info.firmware)
-            device.updateStateOnServer("batteryReading", info.battery_reading)
-
-            self.update_last_checked_code(device)
-
-            for t, value in info.troubles.items():
-                device.updateStateOnServer(t, value)
-            device.setErrorStateOnServer(None)
-
-        except (Py4JError, ConnectionError):
-            log.error("Could not get status of Omni Controller")
-            log.debug("", exc_info=True)
-            device.updateStateOnServer("connected", False)
-            device.setErrorStateOnServer("not connected")
+    def update_device_status(self, dev):
+        self.update_last_checked_code(dev)
+        extensions.DeviceMixin.update_device_status(self, dev)
 
     authority = {0: "Invalid",
                  1: "Master",
@@ -162,87 +113,6 @@ class ControllerExtension(extensions.PluginExtension):
         device.updateStateOnServer("lastCheckedCodeUser", user)
         device.updateStateOnServer("lastCheckedCodeDuress", user == 251)
         device.updateStateOnServer("lastCheckedCode", code)
-
-    models = {30: "HAI Omni IIe",
-              16: "HAI OmniPro II",
-              36: "HAI Lumina",
-              37: "HAI Lumina Pro",
-              38: "HAI Omni LTe"}
-
-    trouble_names = ["freezeTrouble", "batteryLowTrouble", "ACPowerTrouble",
-                     "phoneLineTrouble", "digitalCommunicatorTrouble",
-                     "fuseTrouble", "freezeTrouble", "batteryLowTrouble"]
-
-    def get_controller_info(self, connection):
-        """ Query an Omni controller for its status and put the results into a
-        namedtuple. See SystemInformation.java, SystemStatus.java
-        and SystemTroubles.java for explanations of the data coming from
-        jomnilinkII.
-        """
-        info = connection.omni.reqSystemInformation()
-        model, firmware = self.decode_system_info(info)
-
-        status = connection.omni.reqSystemStatus()
-        battery_reading = status.getBatteryReading()
-
-        troubles = connection.omni.reqSystemTroubles()
-        trouble_states = self.decode_troubles(troubles)
-
-        return namedtuple(
-            "Info", ["model", "firmware", "battery_reading", "troubles"])(
-                model, firmware, battery_reading, trouble_states)
-
-    def decode_system_info(self, info):
-        model = self.models.get(info.getModel(), "Unknown")
-        major = info.getMajor()
-        minor = info.getMinor()
-        revision_number = info.getRevision()
-        if revision_number == 0:
-            # no revision number
-            revision = ""
-        elif revision_number < 26:
-            # revisions a through z
-            revision = chr(ord('a') + revision_number - 1)
-        else:
-            # prototype revisions X1, X2 etc.
-            revision = "X" + str(256 - revision_number)
-        firmware = "{0}.{1}{2}".format(major, minor, revision)
-        return model, firmware
-
-    def decode_troubles(self, troubles):
-        trouble_states = {}
-        for t in self.trouble_names:
-            trouble_states[t] = False
-        for t in troubles.getTroubles():
-            trouble_states[self.trouble_names[t - 1]] = True
-        return trouble_states
-
-    # ----- Device creation ----- #
-
-    def getDeviceList(self, url, dev_ids):
-        """ Return list of devices this extension can create """
-        return [("omniControllerDevice", "Controller")]
-
-    def createDevices(self, dev_type, props, prefix, dev_ids):
-        """ Automatically create a controller device, unless there is one
-        already.
-        """
-        for dev_id in dev_ids:
-            if indigo.devices[dev_id].deviceTypeId == dev_type:
-                return
-        log.debug("Creating controller device")
-
-        props["deviceVersion"] = _VERSION
-        kwargs = {"props": props,
-                  "deviceTypeId": dev_type}
-        name = self.get_unique_name(prefix, "Controller")
-        if name:
-            kwargs["name"] = name
-
-        newdev = indigo.device.create(indigo.kProtocol.Plugin, **kwargs)
-        newdev.model = self.MODEL
-        newdev.subModel = "Controller"
-        newdev.replaceOnServer()
 
     def update(self):
         # periodically inquire about battery reading
@@ -278,88 +148,26 @@ class ControllerExtension(extensions.PluginExtension):
         that are pertinent to the controller functionality, and set
         off any active triggers.
         """
-        try:
-            dev = self.find_device_from_connection(connection)
+        for dev in self.devices_from_url(connection.url):
             triggers = self.triggers[dev.id]
-        except KeyError:
-            return
-        log.debug('Received "other event" notification for device {0}'.format(
-            dev.id))
-        try:
-            notifications = other_event_msg.getNotifications()
-            for n in notifications:
-                log.debug("Notification code: " + hex(n))
-                if n & self.notification_mask == self.notification_value:
-                    event_num = n & self.event_mask
-                    if event_num in self.event_types:
-                        event_type = self.event_types[event_num]
-                        log.debug("Processing {0} event for device {1}".format(
-                            event_type, dev.id))
-                        for t in self.triggers[dev.id][event_type]:
-                            indigo.trigger.execute(t)
-        except Py4JError:
-            log.error("Unable to decode event notification", exc_info=True)
+            log.debug('Received "other event" notification for device '
+                      "{0}".format(dev.id))
+            try:
+                notifications = other_event_msg.getNotifications()
+                for n in notifications:
+                    log.debug("Notification code: " + hex(n))
+                    if n & self.notification_mask == self.notification_value:
+                        event_num = n & self.event_mask
+                        if event_num in self.event_types:
+                            event_type = self.event_types[event_num]
+                            log.debug("Processing {0} event for "
+                                      "device {1}".format(event_type, dev.id))
+                            for t in triggers[event_type]:
+                                indigo.trigger.execute(t)
+            except Py4JError:
+                log.error("Unable to decode event notification", exc_info=True)
 
-        self.update_device_status(dev)
-
-    def reconnect_notification(self, connection, omni):
-        """ Callback used by plugin when successful reconnection
-        is made to the Omni controller. Refresh device states.
-        """
-        try:
-            dev = self.find_device_from_connection(connection)
             self.update_device_status(dev)
-        except KeyError:
-            return
-
-    def disconnect_notification(self, connection, e):
-        """ Callback used by plugin when a disconnect message is
-        received from the jomnilinkII library. Put all devices into
-        the error state. """
-        try:
-            dev = self.find_device_from_connection(connection)
-            dev.updateStateOnServer("connected", False)
-            dev.setErrorStateOnServer("not connected")
-        except KeyError:
-            return
-
-    def find_device_from_connection(self, connection):
-        """ Given a connection, try to find a device with
-        matching url. If not found, raise a KeyError.
-        """
-        url = connection.url
-        for dev_id in self.device_ids:
-            dev = indigo.devices[dev_id]
-            if (dev.pluginProps["url"] == url):
-                return dev
-        raise KeyError
-
-    # ----- Trigger Start and Stop Methods ----- #
-
-    def triggerStartProcessing(self, trigger):
-        log.debug(
-            "Start processing {0} trigger {1}".format(trigger.pluginTypeId,
-                                                      str(trigger.id)))
-        try:
-            dev_id = int(trigger.pluginProps["controllerId"])
-            triggers = self.triggers[dev_id][trigger.pluginTypeId]
-            if trigger.id not in triggers:
-                triggers.append(trigger.id)
-        except KeyError:
-            log.error("Trigger {0} is configured incorrectly".format(
-                trigger.id))
-            log.debug("", exc_info=True)
-
-    def triggerStopProcessing(self, trigger):
-        log.debug(
-            "Stop processing {0} trigger {1}".format(trigger.pluginTypeId,
-                                                     trigger.id))
-        try:
-            dev_id = int(trigger.pluginProps["controllerId"])
-            triggers = self.triggers[dev_id][trigger.pluginTypeId]
-            triggers.remove(trigger.id)
-        except (KeyError, ValueError):
-            pass  # deviceStopComm already removed it from the list
 
     # ----- Action Item Config UI ----- #
 
@@ -540,15 +348,61 @@ class ControllerExtension(extensions.PluginExtension):
                           action.props["consoleNumber"],
                           action.props["beepCommand"]))
 
-    # ----- Write Info on connected controllers to log ----- #
 
-    def say_system_information(self, r, connection, say):
-        omni = connection.omni
-        info = omni.reqSystemInformation()
-        model, firmware = self.decode_system_info(info)
-        say("Model:", model)
-        say("Firmware version:", firmware)
-        say("Phone number:", info.getPhone())
+class ControllerInfo(extensions.Info):
+    """ Get the area info from the Omni device, and assist
+    in fetching status, deciphering notification events and
+    sending commands for areas.
+
+    Public methods:
+        number_and_status_from_notification: return name of area and AreaStatus
+            object deciphered from Omni event notification method
+        fetch_status: query Omni for area status for a area
+        fetch_props: return a AreaProperties object for one area
+        send_command: send a command
+        report: given a print method, write formatted info about all areas
+    """
+    reports = ["System Information", "System Troubles", "System Capacities",
+               "Event Log"]
+
+    def __init__(self, connection):
+        """ ControllerInfo constructor. Query an Omni controller for its status
+        and decipher the results.
+        See SystemInformation.java, SystemStatus.java
+        and SystemTroubles.java for explanations of the data coming from
+        jomnilinkII.
+        """
+        self.connection = connection
+        self.props = {1: ControllerProps(connection)}
+
+    def number_and_status_from_notification(self, status_msg):
+        return None, None
+
+    def fetch_status(self, objnum=1):
+        """ Given the number of a controller (which is always 1!),
+        find out its current status and return a ControllerStatus object.
+        May raise ConnectionError or Py4JavaError if there is no valid
+        connection or a network error.
+        """
+        return ControllerStatus(self.connection)
+
+    # ----- Write Info on connected controller to log ----- #
+
+    def report(self, report_name, say):
+        reportmap = {"System Information": self.system_information_report,
+                     "System Troubles": self.system_troubles_report,
+                     "System Capacities": self.system_capacities_report,
+                     "Event Log": self.event_log_report}
+        if report_name in reportmap:
+            reportmap[report_name](say)
+
+    def system_information_report(self, say):
+        omni = self.connection.omni
+        props = self.props[1]
+
+        say("Model:", props.model)
+        say("Firmware version:", props.firmware)
+        say("Phone number:", omni.reqSystemInformation().getPhone())
 
         status = omni.reqSystemStatus()
         self.say_system_time(status, say)
@@ -587,16 +441,15 @@ class ControllerExtension(extensions.PluginExtension):
             say("Sunset:", time(status.getSunsetHour(),
                                 status.getSunsetMinute()).strftime("%X"))
 
-    def say_system_troubles(self, r, connection, say):
-        omni = connection.omni
-        system_troubles = omni.reqSystemTroubles()
-        trouble_states = self.decode_troubles(system_troubles)
-        troubles = [k for k, v in trouble_states.items() if v]
+    def system_troubles_report(self, say):
+        omni = self.connection.omni
+        cs = self.fetch_status()
+        troubles = [k for k, v in cs.troubles.items() if v]
         say(*troubles if troubles else ["None"])
 
-    def say_system_capacities(self, r, connection, say):
-        omni = connection.omni
-        M = connection.jomnilinkII.Message
+    def system_capacities_report(self, say):
+        omni = self.connection.omni
+        M = self.connection.jomnilinkII.Message
 
         say("Max zones:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_ZONE).getCapacity())
@@ -618,12 +471,12 @@ class ControllerExtension(extensions.PluginExtension):
             omni.reqObjectTypeCapacities(
                 M.OBJ_TYPE_AUDIO_SOURCE).getCapacity())
 
-    def say_event_log(self, r, connection, say):
-        omni = connection.omni
-        M = connection.jomnilinkII.Message
-        self.say_event_log_entries(omni, M, 20, say)
+    def event_log_report(self, say):
+        omni = self.connection.omni
+        M = self.connection.jomnilinkII.Message
+        self.event_log_entries(omni, M, 20, say)
 
-    def say_event_log_entries(self, omni, M, limit, say):
+    def event_log_entries(self, omni, M, limit, say):
         num = 0
         count = 0
         while True:
@@ -631,11 +484,11 @@ class ControllerExtension(extensions.PluginExtension):
             if (m.getMessageType() != M.MESG_TYPE_EVENT_LOG_DATA or
                     count > limit):
                 break
-            self.say_event_log_entry(m, say)
+            self.event_log_entry(m, say)
             num = m.getEventNumber()
             count += 1
 
-    def say_event_log_entry(self, m, say):
+    def event_log_entry(self, m, say):
         time_format = "%b %d %X   "
         if m.isTimeDataValid():
             time = datetime(
@@ -678,6 +531,7 @@ class ControllerExtension(extensions.PluginExtension):
         129: ("Zone Trouble", "Unused", "Zone"),
         130: ("Remote Phone Access", "User", "Unused"),
         131: ("Remote Phone Lockout", "Unused", "Unused"),
+        132: ("Auto Bypass", "Unused", "Zone"),
         133: ("Trouble Cleared", "Unused", "Zone"),
         134: ("PC Access", "User", "Unused"),
         135: ("Alarm Activated", "Type", "Area"),
@@ -717,3 +571,69 @@ class ControllerExtension(extensions.PluginExtension):
         elif pname == "Type":
             return self.alarm_types.get(p, "Unknown")
         return p
+
+
+class ControllerProps(extensions.Props):
+    def __init__(self, connection):
+        info = connection.omni.reqSystemInformation()
+        self.model, self.firmware = self._decode_system_info(info)
+        self.connection = connection
+        self.device_type = "omniControllerDevice"
+        self.name = "Controller"
+        self.number = 1
+        self.type_name = "Controller"
+
+    def _decode_system_info(self, info):
+        model = self.models.get(info.getModel(), "Unknown")
+        print("got " + model)
+        major = info.getMajor()
+        minor = info.getMinor()
+        revision_number = info.getRevision()
+        if revision_number == 0:
+            # no revision number
+            revision = ""
+        elif revision_number < 26:
+            # revisions a through z
+            revision = chr(ord('a') + revision_number - 1)
+        else:
+            # prototype revisions X1, X2 etc.
+            revision = "X" + str(256 - revision_number)
+        firmware = "{0}.{1}{2}".format(major, minor, revision)
+        return model, firmware
+
+    def device_states(self):
+        return {"model": self.model,
+                "firmwareVersion": self.firmware}
+
+    models = {30: "HAI Omni IIe",
+              16: "HAI OmniPro II",
+              36: "HAI Lumina",
+              37: "HAI Lumina Pro",
+              38: "HAI Omni LTe"}
+
+
+class ControllerStatus(extensions.Status):
+    def __init__(self, connection):
+        status = connection.omni.reqSystemStatus()
+        self.battery_reading = status.getBatteryReading()
+
+        troubles = connection.omni.reqSystemTroubles()
+        self.troubles = self._decode_troubles(troubles)
+
+    def _decode_troubles(self, troubles):
+        trouble_states = {}
+        for t in self.trouble_names:
+            trouble_states[t] = False
+        for t in troubles.getTroubles():
+            trouble_states[self.trouble_names[t - 1]] = True
+        return trouble_states
+
+    def device_states(self):
+        result = {"batteryReading": self.battery_reading}
+        for t, value in self.troubles.items():
+            result[t] = value
+        return result
+
+    trouble_names = ["freezeTrouble", "batteryLowTrouble", "ACPowerTrouble",
+                     "phoneLineTrouble", "digitalCommunicatorTrouble",
+                     "fuseTrouble", "freezeTrouble", "batteryLowTrouble"]

@@ -24,7 +24,6 @@ import indigo
 from py4j.protocol import Py4JError
 
 import extensions
-import connection
 from connection import ConnectionError
 
 log = logging.getLogger(__name__)
@@ -32,162 +31,17 @@ log = logging.getLogger(__name__)
 _VERSION = "0.3.0"
 
 
-class AreaExtension(extensions.PluginExtension):
+class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
     """Omni plugin extension for Areas """
     def __init__(self):
         self.type_ids = {"action": [],
                          "event": []}
         self.type_ids["device"] = ["omniAreaDevice"]
         self.callbacks = {}
-        self.reports = {"Areas": self.say_area_info}
-
-        self.device_ids = []
-
-        # key is url, list is AreaInfo instances
-        self._area_info = {}
-
-    # ----- Device Start and Stop Methods ----- #
-
-    def deviceStartComm(self, device):
-        """Start one of the area devices. Query the Omni system and
-        set the status of the indigo device.
-        """
-        log.debug('Starting device "{0}"'.format(device.name))
-        if device.id not in self.device_ids:
-            self.device_ids.append(device.id)
-
-        self.update_device_status(device)
-
-    def deviceStopComm(self, device):
-        if device.id in self.device_ids:
-            log.debug('Stopping device "{0}"'.format(device.name))
-            self.device_ids.remove(device.id)
-
-    # ----- Device creation methods ----- #
-
-    def getDeviceList(self, url, dev_ids):
-        """ Query the Omni controller to see if any areas are defined.
-        If there are, return the area device type.
-        Otherwise, return an empty list.
-        """
-        result = []
-        try:
-            if self.area_info(url).area_props:
-                result = [("omniAreaDevice", "Area")]
-        except (Py4JError, ConnectionError):
-            log.error("Failed to fetch area information from the "
-                      "Omni Controller")
-            log.debug("", exc_info=True)
-        return result
-
-    def createDevices(self, dev_type, values, prefix, dev_ids):
-        """Automatically create a device for each area, unless it
-        already exists.
-        """
-        old_devs = [
-            indigo.devices[id] for id in dev_ids
-            if indigo.devices[id].deviceTypeId == dev_type]
-        values["deviceVersion"] = _VERSION
-        try:
-            for ap in self.area_info(values["url"]).area_props.values():
-                if not any((dev.pluginProps["number"] == ap.number
-                            for dev in old_devs)):
-                    self.create_device(ap, values, prefix)
-        except (Py4JError, ConnectionError):
-            log.error("Failed to fetch area information from the "
-                      "Omni Controller")
-            log.debug("", exc_info=True)
-
-    def create_device(self, area_props, values, prefix):
-        """Create a new device, given area properties and device
-        properties.
-        """
-        log.debug("Creating area device for {0}:{1}".format(area_props.number,
-                                                            area_props.name))
-        values["number"] = area_props.number
-        kwargs = {"props": values,
-                  "deviceTypeId": "omniAreaDevice"}
-        name = self.get_unique_name(prefix, area_props.name)
-        if name:
-            kwargs["name"] = name
-        newdev = indigo.device.create(indigo.kProtocol.Plugin, **kwargs)
-        newdev.model = self.MODEL
-        newdev.subModel = "Area"
-        newdev.replaceOnServer()
-
-    # ----- Callbacks from OMNI Status and events ----- #
-
-    def status_notification(self, connection, status_msg):
-        try:
-            if (status_msg.getStatusType() !=
-                    connection.jomnilinkII.Message.OBJ_TYPE_AREA):
-                return
-            area_info = self.area_info(connection.url)
-            number, status = area_info.number_and_status_from_notification(
-                status_msg)
-        except (Py4JError, ConnectionError):
-            log.debug("status_notification exception in Area", exc_info=True)
-        else:
-            for dev in self.devices_from_url(connection.url):
-                if dev.pluginProps["number"] == number:
-                    self.update_device_from_status(dev, status)
-
-    def reconnect_notification(self, connection, omni):
-        for dev in self.devices_from_url(connection.url):
-            self.update_device_status(dev)
-
-    def disconnect_notification(self, connection, e):
-        for dev in self.devices_from_url(connection.url):
-            dev.setErrorStateOnServer("disconnected")
-
-    def devices_from_url(self, url):
-        """ Produce an iteration of device objects matching the given url
-        by selecting from self.device_ids """
-        for dev_id in self.device_ids:
-            dev = indigo.devices[dev_id]
-            if (url == dev.pluginProps["url"]):
-                yield dev
-
-    def update_device_status(self, dev):
-        area_num = dev.pluginProps["number"]
-        try:
-            area_info = self.area_info(dev.pluginProps["url"])
-            props = area_info.area_props[area_num]
-            status = area_info.fetch_status(area_num)
-        except (ConnectionError, Py4JError):
-            log.debug("Failed to get status of area {0} from Omni".format(
-                area_num))
-            dev.setErrorStateOnServer("disconnected")
-            return
-
-        for k, v in props.device_states().items():
-            dev.updateStateOnServer(k, v)
-        self.update_device_from_status(dev, status)
-        dev.setErrorStateOnServer(None)
-
-    def update_device_from_status(self, dev, status):
-        for k, v in status.device_states().items():
-            dev.updateStateOnServer(k, v)
-
-    def area_info(self, url):
-        """ Handles caching AreaInfo objects by url. Makes a new one if
-        we don't have it yet for that url or if the underlying connection
-        object has changed. """
-        connection = self.plugin.make_connection(url)
-        if (url not in self._area_info or
-                self._area_info[url].connection is not connection):
-            self._area_info[url] = AreaInfo(connection)
-
-        return self._area_info[url]
-
-    # ----- Write info on areas to log ----- #
-
-    def say_area_info(self, report, connection, say):
-        area_info = self.area_info(connection.url)
-        area_info.report(say)
+        extensions.DeviceMixin.__init__(self, AreaInfo, log)
 
 
-class AreaInfo(object):
+class AreaInfo(extensions.Info):
     """ Get the area info from the Omni device, and assist
     in fetching status, deciphering notification events and
     sending commands for areas.
@@ -200,6 +54,7 @@ class AreaInfo(object):
         send_command: send a command
         report: given a print method, write formatted info about all areas
     """
+    reports = ["Areas"]
 
     def __init__(self, connection):
         """ AreaInfo constructor
@@ -215,38 +70,19 @@ class AreaInfo(object):
         """
         self.connection = connection
         self.controller_type = self._get_controller_type()
-        self.area_props = self._fetch_all_props()
+        self.props = self.fetch_all_props(connection, AreaProperties, "AREA",
+                                          "NAMED_UNAMED", "NONE", "NONE")
+        remove = [objnum for objnum, props in self.props.items()
+                  if not props.enabled]
+        for r in remove:
+            del self.props[r]
+
         log.debug("Areas defined on Omni system: " +
                   ", ".join((str(ap.number)
-                             for num, ap in self.area_props.items())))
+                             for num, ap in self.props.items())))
 
     def _get_controller_type(self):
         return "Omni"
-
-    def _fetch_all_props(self):
-        """ Query the connected Omni device for the properties of all the
-        named areas. Build AreaProperties objects out of them, ignoring the
-        statuses, and return a dictionary indexed by object number.
-        Raises Py4JJavaError or ConnectionError if there is a
-        network error """
-        Message = self.connection.jomnilinkII.Message
-        ObjectProps = self.connection.jomnilinkII.MessageTypes.ObjectProperties
-        objnum = 0
-        results = {}
-        while True:
-            m = self.connection.omni.reqObjectProperties(
-                Message.OBJ_TYPE_AREA,
-                objnum, 1,
-                ObjectProps.FILTER_1_NAMED_UNAMED,
-                ObjectProps.FILTER_2_NONE,
-                ObjectProps.FILTER_3_NONE)
-            if m.getMessageType() != Message.MESG_TYPE_OBJ_PROP:
-                break
-            objnum = m.getNumber()
-            props = AreaProperties(m)
-            if props.enabled:
-                results[objnum] = props
-        return results
 
     def fetch_status(self, objnum):
         """Given the number of a area query the Omni controller for the
@@ -254,14 +90,12 @@ class AreaInfo(object):
         May raise ConnectionError or Py4JavaError if there is no valid
         connection or a network error.
         """
-        if objnum not in self.area_props:
+        if objnum not in self.props:
             raise ConnectionError("Area {0} is not defined on Omni system")
-        jomnilinkII = self.connection.jomnilinkII
-        Message = jomnilinkII.Message
         status_msg = self.connection.omni.reqObjectStatus(
-            Message.OBJ_TYPE_AREA, objnum, objnum)
-        status = status_msg.getStatuses()[0]
-        return AreaStatus(self.controller_type, status)
+            self.connection.jomnilinkII.Message.OBJ_TYPE_AREA, objnum, objnum)
+
+        return AreaStatus(self.controller_type, status_msg.getStatuses()[0])
 
     def number_and_status_from_notification(self, status_msg):
         """ Given a status message from the JomniLinkII notification
@@ -273,10 +107,9 @@ class AreaInfo(object):
         if status_msg.getStatusType() != Message.OBJ_TYPE_AREA:
             return None, None
 
-        statuses = status_msg.getStatuses()
-        status = statuses[0]
+        status = status_msg.getStatuses()[0]
         objnum = status.getNumber()
-        log.debug("Received status for " + self.area_props[objnum].name)
+        log.debug("Received status for " + self.props[objnum].name)
 
         return objnum, AreaStatus(self.controller_type, status)
 
@@ -290,8 +123,8 @@ class AreaInfo(object):
                       cmd_name)
         self.connection.omni.controllerCommand(cmd, area_num, parameter)
 
-    def report(self, say):
-        items = sorted(self.area_props.items())
+    def report(self, report_name, say):
+        items = sorted(self.props.items())
         if not items:
             say("None")
             return
@@ -302,7 +135,6 @@ class AreaInfo(object):
                   ("Entry", 6),
                   ("Exit", 6),
                   ("Mode", 21)]
-
 
         fmt = "  ".join(("{{{0}: <{1}}}".format(i, w[1]) for i, w in
                          enumerate(widths)))
@@ -316,8 +148,8 @@ class AreaInfo(object):
                 ", ".join(s.alarms))
 
 
-class AreaProperties(object):
-    """ AreaProperties class, represents Omni control area properties """
+class AreaProperties(extensions.Props):
+    """ AreaProperties class, represents Omni  area properties """
     def __init__(self, omni_props):
         """ Construct a AreaProperties object from the jomnilinkII
         Area Properties object.
@@ -329,14 +161,16 @@ class AreaProperties(object):
         self.enabled = omni_props.isEnabled()
         self.exit_delay = omni_props.getExitDelay()
         self.entry_delay = omni_props.getEntryDelay()
+        self.device_type = "omniAreaDevice"
+        self.type_name = "Area"
 
     def device_states(self):
-        return {"name" : self.name,
-                "exitDelay" : self.exit_delay,
-                "entryDelay" : self.entry_delay}
+        return {"name": self.name,
+                "exitDelay": self.exit_delay,
+                "entryDelay": self.entry_delay}
 
 
-class AreaStatus(object):
+class AreaStatus(extensions.Status):
     """ AreaStatus class, represents Omni Area status """
     def __init__(self, controller_type, omni_status):
         """ Construct a AreaStatus object from a jomnilinkII
@@ -376,4 +210,4 @@ class AreaStatus(object):
     mode_delay_mask = 0b0111
 
     alarm_names = ["Burglary", "Fire", "Gas", "Auxiliary", "Freeze", "Water",
-              "Duress", "Temperature"]
+                   "Duress", "Temperature"]

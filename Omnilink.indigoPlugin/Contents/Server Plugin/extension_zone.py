@@ -33,49 +33,17 @@ log = logging.getLogger(__name__)
 _VERSION = "0.3.0"
 
 
-class OldVersionError(Exception):
-    pass
-
-
-class ZoneExtension(extensions.PluginExtension):
+class ZoneExtension(extensions.DeviceMixin, extensions.PluginExtension):
     """Omni plugin extension for Zones """
     def __init__(self):
         self.type_ids = {"device": ["omniZoneDevice"],
                          "action": [],
                          "event": []}
         self.callbacks = {}
-        self.reports = {"Zones": self.say_zone_info}
 
-        self.device_ids = []
+        extensions.DeviceMixin.__init__(self, ZoneInfo, log)
 
-        # key is url, value is ZoneInfo instance
-        self._zone_info = {}
-
-    # ----- Device Start and Stop Methods ----- #
-
-    def deviceStartComm(self, device):
-        """ Start an omniZoneDevice. Query the Omni system and set the status
-        of the indigo device """
-
-        try:
-            self.update_device_version(device)
-        except OldVersionError:
-            log.error('Unfortunately "{0}" was created in a previous '
-                      "version of this plugin and cannot be started. Please "
-                      "delete and redefine it.".format(device.name))
-            device.setErrorStateOnServer("OLD")
-            return
-
-        log.debug('Starting device "{0}"'.format(device.name))
-        if device.id not in self.device_ids:
-            self.device_ids.append(device.id)
-        self.update_device_status(device)
-
-    def deviceStopComm(self, device):
-        """ Stop an OmniZoneDevice. """
-        if device.id in self.device_ids:
-            log.debug('Stopping device "{0}"'.format(device.name))
-            self.device_ids.remove(device.id)
+    # ----- Device updates ----- #
 
     def update_device_version(self, device):
         """ if the device was defined in a previous version of this plugin,
@@ -87,23 +55,14 @@ class ZoneExtension(extensions.PluginExtension):
         if (StrictVersion(device_version) >= StrictVersion(_VERSION)):
             return
         if StrictVersion(device_version) < StrictVersion("0.3.0"):
-            raise OldVersionError
+            raise extensions.OldVersionError
+
+    def update_device_from_status(self, dev, status):
+        extensions.DeviceMixin.update_device_from_status(self, dev, status)
+        dev.updateStateOnServer("sensorValue", status.loop,
+                                uiValue=str(status.loop))
 
     # ----- Device creation methods ----- #
-
-    def getDeviceList(self, url, dev_ids):
-        """ Query the Omni controller to see if any zones are defined.
-        If there are, return omniZoneDevice as the device type we can create.
-        Otherwise, return an empty list.
-        """
-        result = []
-        try:
-            if self.zone_info(url).zone_props:
-                result = [("omniZoneDevice", "Zone")]
-        except (Py4JError, ConnectionError):
-            log.error("Failed to fetch zone information from Omni Controller")
-            log.debug("", exc_info=True)
-        return result
 
     def createDevices(self, dev_type, values, prefix, dev_ids):
         """Automatically create a device for each zone, unless it already
@@ -113,39 +72,11 @@ class ZoneExtension(extensions.PluginExtension):
         to create the devices.
 
         """
-        values["deviceVersion"] = _VERSION
         values["SupportsOnState"] = True
         values["SupportsSensorValue"] = True
         values["SupportsStatusRequest"] = True
-
-        old_dev_numbers = [indigo.devices[id].pluginProps["number"]
-                           for id in dev_ids
-                           if indigo.devices[id].deviceTypeId == dev_type]
-        try:
-            for zp in self.zone_info(values["url"]).zone_props.values():
-                if zp.number not in old_dev_numbers:
-                    self.create_device(zp, values, prefix)
-        except (Py4JError, ConnectionError):
-            log.error("Failed to fetch zone information from Omni Controller")
-            log.debug("", exc_info=True)
-
-    def create_device(self, zone_props, values, prefix):
-        """ Create a new device, given zone properties and device properties
-        """
-        log.debug("Creating Zone device for {0}:{1}".format(zone_props.number,
-                                                            zone_props.name))
-        values["number"] = zone_props.number
-        name = self.get_unique_name(prefix, zone_props.name)
-
-        kwargs = {"props": values,
-                  "deviceTypeId": "omniZoneDevice"}
-        if name:
-            kwargs["name"] = name
-
-        newdev = indigo.device.create(indigo.kProtocol.Plugin, **kwargs)
-        newdev.model = self.MODEL
-        newdev.subModel = "Zone"
-        newdev.replaceOnServer()
+        extensions.DeviceMixin.createDevices(self, dev_type, values, prefix,
+                                             dev_ids)
 
     # ----- Callbacks from Indigo for device actions ----- #
 
@@ -173,85 +104,8 @@ class ZoneExtension(extensions.PluginExtension):
         log.error('ignored "{0}" request: action not implemented for '
                   'sensor "{1}"'.format(action.deviceAction.name, dev.name))
 
-    # ----- Callbacks from OMNI Status and events ----- #
 
-    def status_notification(self, connection, status_msg):
-        try:
-            if (status_msg.getStatusType() !=
-                    connection.jomnilinkII.Message.OBJ_TYPE_ZONE):
-                return
-            zone_info = self.zone_info(connection.url)
-            number, status = zone_info.number_and_status_from_notification(
-                status_msg)
-        except (Py4JError, ConnectionError):
-            log.debug("status_notification exception in Zone", exc_info=True)
-        else:
-            for dev in self.devices_from_url(connection.url):
-                if dev.pluginProps["number"] == number:
-                    self.update_device_from_status(dev, status)
-
-    def reconnect_notification(self, connection, omni):
-        for dev in self.devices_from_url(connection.url):
-            self.update_device_status(dev)
-
-    def disconnect_notification(self, connection, e):
-        for dev in self.devices_from_url(connection.url):
-            dev.setErrorStateOnServer("disconnected")
-
-    def devices_from_url(self, url):
-        """ Produce an iteration of device objects matching the given url
-        by selecting from self.device_ids """
-        for dev_id in self.device_ids:
-            dev = indigo.devices[dev_id]
-            if (url == dev.pluginProps["url"]):
-                yield dev
-
-    def update_device_status(self, dev):
-        try:
-            zone_info = self.zone_info(dev.pluginProps["url"])
-            props = zone_info.zone_props[dev.pluginProps["number"]]
-            status = zone_info.fetch_status(dev.pluginProps["number"])
-        except (ConnectionError, Py4JError):
-            log.debug("Failed to get status of zone {0} from Omni".format(
-                dev.pluginProps["number"]))
-            dev.setErrorStateOnServer("disconnected")
-        else:
-            dev.updateStateOnServer("name", props.name)
-            dev.updateStateOnServer("crossZoning", props.cross_zoning)
-            dev.updateStateOnServer("swingerShutdown", props.swinger_shutdown)
-            dev.updateStateOnServer("dialOutDelay", props.dial_out_delay)
-            dev.updateStateOnServer("type", props.type_name)
-            dev.updateStateOnServer("area", props.area)
-            self.update_device_from_status(dev, status)
-            dev.setErrorStateOnServer(None)
-
-    def update_device_from_status(self, dev, status):
-        dev.updateStateOnServer("condition", status.condition)
-        dev.updateStateOnServer("onOffState", status.condition == "Secure")
-        dev.updateStateOnServer("alarmStatus", status.latched_alarm)
-        dev.updateStateOnServer("armingStatus", status.arming)
-        dev.updateStateOnServer("hadTrouble", status.had_trouble)
-        dev.updateStateOnServer("sensorValue", status.loop,
-                                uiValue=str(status.loop))
-
-    def zone_info(self, url):
-        """ Handles caching ZoneInfo objects by url. Makes a new one if
-        we don't have it yet for that url or if the underlying connection
-        object has changed. """
-        connection = self.plugin.make_connection(url)
-        if (url not in self._zone_info or
-                self._zone_info[url].connection is not connection):
-            self._zone_info[url] = ZoneInfo(connection)
-        return self._zone_info[url]
-
-    # ----- Write info on zones to log ----- #
-
-    def say_zone_info(self, report, connection, say):
-        zone_info = self.zone_info(connection.url)
-        zone_info.report(say)
-
-
-class ZoneInfo(object):
+class ZoneInfo(extensions.Info):
     """ Get the zone info from the Omni device, and assist
     in fetching status and deciphering notification events for zones.
 
@@ -262,6 +116,7 @@ class ZoneInfo(object):
         fetch_props: return a ZoneProperties object for one zone
         report: given a print method, write formatted info about all zones
     """
+    reports = ["Zones"]
 
     def __init__(self, connection):
         """ ZoneInfo constructor
@@ -274,32 +129,10 @@ class ZoneInfo(object):
         May raise Py4JError or ConnectionError
         """
         self.connection = connection
-        self.zone_props = self._fetch_all_props()
+        self.props = self.fetch_all_props(connection, ZoneProperties, "ZONE",
+                                          "NAMED", "AREA_ALL", "ANY_LOAD")
         log.debug("Zones defined on Omni system: " +
-                  ", ".join((zp.name for num, zp in self.zone_props.items())))
-
-    def _fetch_all_props(self):
-        """ Query the connected Omni device for the properties of all the
-        named zones. Build ZoneProperties objects out of them, ignoring the
-        statuses, and return a dictionary indexed by object number.
-        Raises Py4JJavaError or ConnectionError if there is a
-        network error """
-        Message = self.connection.jomnilinkII.Message
-        ObjectProps = self.connection.jomnilinkII.MessageTypes.ObjectProperties
-        objnum = 0
-        results = {}
-        while True:
-            m = self.connection.omni.reqObjectProperties(
-                Message.OBJ_TYPE_ZONE,
-                objnum, 1,
-                ObjectProps.FILTER_1_NAMED,
-                ObjectProps.FILTER_2_AREA_ALL,
-                ObjectProps.FILTER_3_ANY_LOAD)
-            if m.getMessageType() != Message.MESG_TYPE_OBJ_PROP:
-                break
-            objnum = m.getNumber()
-            results[objnum] = ZoneProperties(m)
-        return results
+                  ", ".join((zp.name for num, zp in self.props.items())))
 
     def fetch_status(self, objnum):
         """Given the number of a zone query the Omni controller for the
@@ -307,7 +140,7 @@ class ZoneInfo(object):
         May raise ConnectionError or Py4JavaError if there is no valid
         connection or a network error.
         """
-        if objnum not in self.zone_props:
+        if objnum not in self.props:
             raise ConnectionError("Zone {0} is not defined on Omni system")
         jomnilinkII = self.connection.jomnilinkII
         Message = jomnilinkII.Message
@@ -329,12 +162,12 @@ class ZoneInfo(object):
         statuses = status_msg.getStatuses()
         status = statuses[0]
         objnum = status.getNumber()
-        log.debug("Received status for " + self.zone_props[objnum].name)
+        log.debug("Received status for " + self.props[objnum].name)
 
         return objnum, ZoneStatus(status)
 
-    def report(self, say):
-        items = sorted(self.zone_props.items())
+    def report(self, report_name, say):
+        items = sorted(self.props.items())
         if not items:
             say("None")
             return
@@ -369,16 +202,19 @@ class ZoneInfo(object):
             "DOD: Dial out Delay")
 
 
-class ZoneProperties(object):
+class ZoneProperties(extensions.Props):
     """ ZoneProperties class, represents Omni zone properties """
     def __init__(self, omni_props):
         """ Construct a ZoneProperties object from the jomnilinkII
         Zone Properties object.
         """
+        self.device_type = "omniZoneDevice"
+        self.type_name = "Zone"
+
         self.name = omni_props.getName()
         self.number = omni_props.getNumber()
         zone_type = omni_props.getZoneType()
-        self.type_name = self.type_names.get(
+        self.zone_type = self.zone_types.get(
             zone_type, "Unknown Zone Type {0}".format(zone_type))
         self.area = omni_props.getArea()
 
@@ -387,7 +223,15 @@ class ZoneProperties(object):
         self.swinger_shutdown = (0b010 & options) != 0
         self.dial_out_delay = (0b0100 & options) != 0
 
-    type_names = {0: "Entry/Exit",
+    def device_states(self):
+        return {"name": self.name,
+                "crossZoning": self.cross_zoning,
+                "swingerShutdown": self.swinger_shutdown,
+                "dialOutDelay": self.dial_out_delay,
+                "type": self.zone_type,
+                "area": self.area}
+
+    zone_types = {0: "Entry/Exit",
                   1: "Perimeter",
                   2: "Night Interior",
                   3: "Away Interior",
@@ -422,7 +266,7 @@ class ZoneProperties(object):
                   }
 
 
-class ZoneStatus(object):
+class ZoneStatus(extensions.Status):
     """ ZoneStatus class, represents Omni Zone status """
     def __init__(self, omni_status):
         """ Construct a ZoneStatus object from a jomnilinkII
@@ -437,6 +281,14 @@ class ZoneStatus(object):
         self.arming = self.armings[status_byte &
                                    self.arming_mask]
         self.had_trouble = (status_byte & self.trouble_mask) != 0
+
+    def device_states(self):
+        return {"condition": self.condition,
+                "onOffState": self.condition == "Secure",
+                "alarmStatus": self.latched_alarm,
+                "armingStatus": self.arming,
+                "hadTrouble": self.had_trouble,
+                "sensorValue": self.loop}
 
     conditions = {0b00: "Secure",
                   0b01: "Not Ready",

@@ -18,14 +18,12 @@
 
 """ Omni Plugin extension for Control Units """
 from __future__ import unicode_literals
-from collections import defaultdict
 import logging
 
 import indigo
 from py4j.protocol import Py4JError
 
 import extensions
-import connection
 from connection import ConnectionError
 
 log = logging.getLogger(__name__)
@@ -33,114 +31,17 @@ log = logging.getLogger(__name__)
 _VERSION = "0.3.0"
 
 
-class ControlUnitExtension(extensions.PluginExtension):
+class ControlUnitExtension(extensions.DeviceMixin, extensions.PluginExtension):
     """Omni plugin extension for Control Units """
-    device_types = {
-        1: ("omniStandardUnit",     "Standard Control"),
-        2: ("omniExtendedUnit",     "Extended Control"),
-        3: ("omniComposeUnit",      "Compose Control"),
-        4: ("omniUPBUnit",          "UPB Control"),
-        5: ("omniHLCRoomUnit",      "HLC Room Control"),
-        6: ("omniHLCLoadUnit",      "HLC Load Control"),
-        7: ("omniLuminaModeUnit",   "Lumina Mode Control"),
-        8: ("omniRadioRAUnit",      "Radio RA Control"),
-        9: ("omniCentraLiteUnit",   "CentraLite Control"),
-        10: ("omniViziaRFRoomUnit", "Vizia RF Room Control"),
-        11: ("omniViziaRFLoadUnit", "Vizia RF Load Control"),
-        12: ("omniFlagUnit",        "Omni Controller Flag"),
-        13: ("omniVoltageUnit",     "Voltage Output Control"),
-        14: ("omniAudioZoneUnit",   "Audio Zone Control"),
-        15: ("omniAudioSourceUnit", "Audio Source Control"),
-    }
-    relay_device_types = ["omniFlagUnit", "omniVoltageUnit",
-                          "omniAudioZoneUnit", "omniAudioSourceUnit"]
 
     def __init__(self):
         self.type_ids = {"action": [],
                          "event": []}
         self.type_ids["device"] = [devtype for devtype, name
-                                   in self.device_types.values()]
+                                   in UnitProperties.device_types.values()]
         self.callbacks = {}
-        self.reports = {"Control Units": self.say_unit_info}
 
-        # key is device type, list contains device id's
-        self.device_ids = defaultdict(list)
-
-        # key is url, list is UnitInfo instances
-        self._unit_info = {}
-
-    # ----- Device Start and Stop Methods ----- #
-
-    def deviceStartComm(self, device):
-        """Start one of the control unit devices. Query the Omni system and
-        set the status of the indigo device.
-        """
-        log.debug('Starting device "{0}"'.format(device.name))
-        if device.id not in self.device_ids[device.deviceTypeId]:
-            self.device_ids[device.deviceTypeId].append(device.id)
-
-        self.update_device_status(device)
-
-    def deviceStopComm(self, device):
-        if device.id in self.device_ids[device.deviceTypeId]:
-            log.debug('Stopping device "{0}"'.format(device.name))
-            self.device_ids[device.deviceTypeId].remove(device.id)
-
-    # ----- Device creation methods ----- #
-
-    def getDeviceList(self, url, dev_ids):
-        """ Query the Omni controller to see if any units are defined.
-        If there are, return the device types found.
-        Otherwise, return an empty list.
-        """
-        result = []
-        try:
-            unit_props = self.unit_info(url).unit_props
-            result = list(set(((up.device_type, up.type_name) for up in
-                               unit_props.values())))
-        except (Py4JError, ConnectionError):
-            log.error("Failed to fetch control unit information from the "
-                      "Omni Controller")
-            log.debug("", exc_info=True)
-        return result
-
-    def createDevices(self, dev_type, values, prefix, dev_ids):
-        """Automatically create a device for each control unit, unless it
-        already exists.
-        """
-        old_devs = [
-            indigo.devices[id] for id in dev_ids
-            if indigo.devices[id].deviceTypeId == dev_type]
-        values["deviceVersion"] = _VERSION
-        try:
-            for up in self.unit_info(values["url"]).unit_props.values():
-                if up.device_type == dev_type:
-                    if not any((dev.pluginProps["number"] == up.number
-                                for dev in old_devs)):
-                        self.create_device(up, values, prefix)
-        except (Py4JError, ConnectionError):
-            log.error("Failed to fetch control unit information from the "
-                      "Omni Controller")
-            log.debug("", exc_info=True)
-
-    def create_device(self, unit_props, values, prefix):
-        """Create a new device, given control unit properties and device
-        properties.
-        """
-        log.debug("Creating control unit device type {2} "
-                  "for {0}:{1}".format(unit_props.number,
-                                       unit_props.name,
-                                       unit_props.device_type))
-        values["number"] = unit_props.number
-        kwargs = {"props": values,
-                  "deviceTypeId": unit_props.device_type}
-        name = self.get_unique_name(prefix, unit_props.name)
-        if name:
-            kwargs["name"] = name
-        newdev = indigo.device.create(indigo.kProtocol.Plugin, **kwargs)
-        newdev.model = self.MODEL
-        newdev.subModel = unit_props.type_name
-        newdev.replaceOnServer()
+        extensions.DeviceMixin.__init__(self, UnitInfo, log)
 
     # ----- Device Action Callbacks ----- #
 
@@ -160,7 +61,7 @@ class ControlUnitExtension(extensions.PluginExtension):
         method, text = dispatch[action.deviceAction]
         try:
             unit_num = dev.pluginProps["number"]
-            unit_info = self.unit_info(dev.pluginProps["url"])
+            unit_info = self.info(dev.pluginProps["url"])
             method(action, dev, unit_num, unit_info)
             indigo.server.log('sent "{0}" {1} request'.format(dev.name, text))
         except (Py4JError, ConnectionError):
@@ -203,81 +104,8 @@ class ControlUnitExtension(extensions.PluginExtension):
         log.error("Device action {0} is not implemented for {1}".format(
             action.deviceAction.name, dev.name))
 
-    # ----- Callbacks from OMNI Status and events ----- #
 
-    def status_notification(self, connection, status_msg):
-        try:
-            if (status_msg.getStatusType() !=
-                    connection.jomnilinkII.Message.OBJ_TYPE_UNIT):
-                return
-            unit_info = self.unit_info(connection.url)
-            number, status = unit_info.number_and_status_from_notification(
-                status_msg)
-        except (Py4JError, ConnectionError):
-            log.debug("status_notification exception in Unit", exc_info=True)
-        else:
-            for dev in self.devices_from_url(connection.url):
-                if dev.pluginProps["number"] == number:
-                    self.update_device_from_status(dev, status)
-
-    def reconnect_notification(self, connection, omni):
-        for dev in self.devices_from_url(connection.url):
-            self.update_device_status(dev)
-
-    def disconnect_notification(self, connection, e):
-        for dev in self.devices_from_url(connection.url):
-            dev.setErrorStateOnServer("disconnected")
-
-    def devices_from_url(self, url):
-        """ Produce an iteration of device objects matching the given url
-        by selecting from self.device_ids """
-        for dev_ids_of_type in self.device_ids.values():
-            for dev_id in dev_ids_of_type:
-                dev = indigo.devices[dev_id]
-                if (url == dev.pluginProps["url"]):
-                    yield dev
-
-    def update_device_status(self, dev):
-        unit_num = dev.pluginProps["number"]
-        try:
-            unit_info = self.unit_info(dev.pluginProps["url"])
-            props = unit_info.unit_props[unit_num]
-            status = unit_info.fetch_status(unit_num)
-        except (ConnectionError, Py4JError):
-            log.debug("Failed to get status of unit {0} from Omni".format(
-                unit_num))
-            dev.setErrorStateOnServer("disconnected")
-            return
-
-        dev.updateStateOnServer("name", props.name)
-        self.update_device_from_status(dev, status)
-        dev.setErrorStateOnServer(None)
-
-    def update_device_from_status(self, dev, status):
-        dev.updateStateOnServer("onOffState", status.status != 0)
-        dev.updateStateOnServer("timeLeftSeconds", status.time)
-        if dev.deviceTypeId not in self.relay_device_types:
-            dev.updateStateOnServer("brightnessLevel", status.status)
-
-    def unit_info(self, url):
-        """ Handles caching UnitInfo objects by url. Makes a new one if
-        we don't have it yet for that url or if the underlying connection
-        object has changed. """
-        connection = self.plugin.make_connection(url)
-        if (url not in self._unit_info or
-                self._unit_info[url].connection is not connection):
-            self._unit_info[url] = UnitInfo(connection)
-
-        return self._unit_info[url]
-
-    # ----- Write info on units to log ----- #
-
-    def say_unit_info(self, report, connection, say):
-        unit_info = self.unit_info(connection.url)
-        unit_info.report(say)
-
-
-class UnitInfo(object):
+class UnitInfo(extensions.Info):
     """ Get the unit info from the Omni device, and assist
     in fetching status, deciphering notification events and
     sending commands for units.
@@ -290,6 +118,7 @@ class UnitInfo(object):
         send_command: send a command
         report: given a print method, write formatted info about all units
     """
+    reports = ["Control Units"]
 
     def __init__(self, connection):
         """ UnitInfo constructor
@@ -304,32 +133,11 @@ class UnitInfo(object):
         May raise Py4JError or ConnectionError
         """
         self.connection = connection
-        self.unit_props = self._fetch_all_props()
+        self.props = self.fetch_all_props(connection, UnitProperties,
+                                          "UNIT", "NAMED", "AREA_ALL",
+                                          "ANY_LOAD")
         log.debug("Units defined on Omni system: " +
-                  ", ".join((zp.name for num, zp in self.unit_props.items())))
-
-    def _fetch_all_props(self):
-        """ Query the connected Omni device for the properties of all the
-        named units. Build UnitProperties objects out of them, ignoring the
-        statuses, and return a dictionary indexed by object number.
-        Raises Py4JJavaError or ConnectionError if there is a
-        network error """
-        Message = self.connection.jomnilinkII.Message
-        ObjectProps = self.connection.jomnilinkII.MessageTypes.ObjectProperties
-        objnum = 0
-        results = {}
-        while True:
-            m = self.connection.omni.reqObjectProperties(
-                Message.OBJ_TYPE_UNIT,
-                objnum, 1,
-                ObjectProps.FILTER_1_NAMED,
-                ObjectProps.FILTER_2_AREA_ALL,
-                ObjectProps.FILTER_3_ANY_LOAD)
-            if m.getMessageType() != Message.MESG_TYPE_OBJ_PROP:
-                break
-            objnum = m.getNumber()
-            results[objnum] = UnitProperties(m)
-        return results
+                  ", ".join((zp.name for num, zp in self.props.items())))
 
     def fetch_status(self, objnum):
         """Given the number of a unit query the Omni controller for the
@@ -337,14 +145,14 @@ class UnitInfo(object):
         May raise ConnectionError or Py4JavaError if there is no valid
         connection or a network error.
         """
-        if objnum not in self.unit_props:
+        if objnum not in self.props:
             raise ConnectionError("Unit {0} is not defined on Omni system")
         jomnilinkII = self.connection.jomnilinkII
         Message = jomnilinkII.Message
         status_msg = self.connection.omni.reqObjectStatus(
             Message.OBJ_TYPE_UNIT, objnum, objnum)
         status = status_msg.getStatuses()[0]
-        return UnitStatus(status)
+        return UnitStatus(self.props[objnum].has_brightness, status)
 
     def number_and_status_from_notification(self, status_msg):
         """ Given a status message from the JomniLinkII notification
@@ -359,9 +167,9 @@ class UnitInfo(object):
         statuses = status_msg.getStatuses()
         status = statuses[0]
         objnum = status.getNumber()
-        log.debug("Received status for " + self.unit_props[objnum].name)
+        log.debug("Received status for " + self.props[objnum].name)
 
-        return objnum, UnitStatus(status)
+        return objnum, UnitStatus(self.props[objnum].has_brightness, status)
 
     def send_command(self, cmd_name, unit_num, parameter):
         """ Send the Omni controller a command, specified by name,
@@ -373,8 +181,8 @@ class UnitInfo(object):
                       cmd_name)
         self.connection.omni.controllerCommand(cmd, unit_num, parameter)
 
-    def report(self, say):
-        items = sorted(self.unit_props.items())
+    def report(self, report_name, say):
+        items = sorted(self.props.items())
         if not items:
             say("None")
             return
@@ -406,7 +214,7 @@ class UnitInfo(object):
             say(fmt.format(num, up.name, up.type_name, us.time, status))
 
 
-class UnitProperties(object):
+class UnitProperties(extensions.Props):
     """ UnitProperties class, represents Omni control unit properties """
     def __init__(self, omni_props):
         """ Construct a UnitProperties object from the jomnilinkII
@@ -416,14 +224,48 @@ class UnitProperties(object):
         self.number = omni_props.getNumber()
         unit_type = omni_props.getUnitType()
         self.device_type, self.type_name = \
-            ControlUnitExtension.device_types.get(
+            self.device_types.get(
                 unit_type, ("", "Unknown Unit Type {0}".format(unit_type)))
+        self.has_brightness = self.device_type not in self.relay_device_types
+
+    def device_states(self):
+        """ Return device states to update based on properties """
+        return {"name": self.name}
+
+    device_types = {
+        1: ("omniStandardUnit",     "Standard Control"),
+        2: ("omniExtendedUnit",     "Extended Control"),
+        3: ("omniComposeUnit",      "Compose Control"),
+        4: ("omniUPBUnit",          "UPB Control"),
+        5: ("omniHLCRoomUnit",      "HLC Room Control"),
+        6: ("omniHLCLoadUnit",      "HLC Load Control"),
+        7: ("omniLuminaModeUnit",   "Lumina Mode Control"),
+        8: ("omniRadioRAUnit",      "Radio RA Control"),
+        9: ("omniCentraLiteUnit",   "CentraLite Control"),
+        10: ("omniViziaRFRoomUnit", "Vizia RF Room Control"),
+        11: ("omniViziaRFLoadUnit", "Vizia RF Load Control"),
+        12: ("omniFlagUnit",        "Omni Controller Flag"),
+        13: ("omniVoltageUnit",     "Voltage Output Control"),
+        14: ("omniAudioZoneUnit",   "Audio Zone Control"),
+        15: ("omniAudioSourceUnit", "Audio Source Control"),
+    }
+    relay_device_types = ["omniFlagUnit", "omniVoltageUnit",
+                          "omniAudioZoneUnit", "omniAudioSourceUnit"]
 
 
-class UnitStatus(object):
+class UnitStatus(extensions.Status):
     """ UnitStatus class, represents Omni Unit status """
-    def __init__(self, omni_status):
+    def __init__(self, has_brightness, omni_status):
         """ Construct a UnitStatus object from a jomnilinkII
         Unit Status object. """
         self.status = omni_status.getStatus()
         self.time = omni_status.getTime()
+        self.has_brightness = has_brightness
+
+    def device_states(self):
+        """ Return device states to update based on status """
+        result = {"onOffState": self.status != 0,
+                  "timeLeftSeconds": self.time}
+        if self.has_brightness:
+            result["brightnessLevel"] = self.status
+        return result

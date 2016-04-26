@@ -104,20 +104,20 @@ def test_device_start_comm_succeeds_on_valid_input(
 
     plugin.deviceStartComm(dev)
 
-    assert dev.error_state is None
+    assert dev.errorState is None
     for k, v in req_object_status_unit_states.items():
         assert dev.states[k] == v
 
     assert dev.states["name"] == "X10 Unit"
 
 
-def test_device_start_comm_sets_error_state_on_connection_error(
+def test_device_start_comm_sets_errorState_on_connection_error(
         plugin, indigo, py4j, omni1, unit_devices):
     dev = indigo.devices["test X10 Unit"]
     omni1.reqObjectStatus.side_effect = py4j.protocol.Py4JError
 
     plugin.deviceStartComm(dev)
-    assert dev.error_state is not None
+    assert dev.errorState is not None
 
 
 def test_remove_devices_removes_unit_devices(
@@ -149,10 +149,10 @@ def test_notification_changes_device_state(
     assert dev.states["onOffState"]
     assert dev.states["brightnessLevel"] == 1
     assert dev.states["timeLeftSeconds"] == 100
-    assert dev.error_state is None
+    assert dev.errorState is None
 
 
-def test_disconnect_sets_error_state_of_correct_unit_device(
+def test_disconnect_sets_errorState_of_correct_unit_device(
         plugin, indigo, unit_devices, device_factory_fields,
         device_connection_props_2,
         device_factory_fields_2, omni2, omni_unit_types):
@@ -172,15 +172,15 @@ def test_disconnect_sets_error_state_of_correct_unit_device(
     helpers.run_concurrent_thread(plugin, 1)
 
     for dev in unit_devices:
-        assert dev.error_state is None
+        assert dev.errorState is None
     for dev in unit_devices_2:
-        assert dev.error_state is not None
+        assert dev.errorState is not None
 
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
 
 
-def test_reconnect_notification_clears_device_error_state(
+def test_reconnect_notification_clears_device_errorState(
         plugin, indigo, unit_devices, omni1, patched_datetime):
 
     for dev in unit_devices:
@@ -190,7 +190,7 @@ def test_reconnect_notification_clears_device_error_state(
     omni1._disconnect("notConnectedEvent", Mock())
     helpers.run_concurrent_thread(plugin, 1)
 
-    assert dev.error_state is not None
+    assert dev.errorState is not None
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
 
@@ -198,7 +198,7 @@ def test_reconnect_notification_clears_device_error_state(
     sleep(0.1)
     helpers.run_concurrent_thread(plugin, 1)
 
-    assert dev.error_state is None
+    assert dev.errorState is None
 
 
 def test_device_stop_comm_succeeds(plugin, indigo, unit_devices):

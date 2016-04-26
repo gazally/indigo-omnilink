@@ -199,7 +199,6 @@ def omni_messages(req_object_properties, req_object_status):
 
 def omni1_system_messages_asserts(dev):
     """ assert that controller device states match omni_messages fixture """
-    assert dev.states["connected"]
     assert dev.states["model"] == "HAI Omni IIe"
     assert dev.states["firmwareVersion"] == "2.16b"
     assert dev.states["batteryReading"] == 200
@@ -245,7 +244,6 @@ def omni_messages_2(req_object_properties, req_object_status):
 
 def omni2_system_messages_asserts(dev):
     """ assert that controller device states match omni_messages_2 fixture """
-    assert dev.states["connected"]
     assert dev.states["model"] == "HAI Lumina Pro"
     assert dev.states["firmwareVersion"] == "3.0X2"
     assert dev.states["batteryReading"] == 0
@@ -327,6 +325,7 @@ def omni_unit_types():
     """ Return a list of the device types corresponding to omni_unit_props. """
     return ["omniStandardUnit", "omniRadioRAUnit", "omniVoltageUnit"]
 
+
 @pytest.fixture
 def omni_area_props(jomnilinkII_message):
     mtype = jomnilinkII_message.MESG_TYPE_OBJ_PROP
@@ -353,6 +352,7 @@ def omni_area_statuses(jomnilinkII_message):
     return [jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_AREA,
                                      [jomni_mimic.AreaStatus(1, 0, 6, 0, 0)]),
             jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_AREA,
-                                     [jomni_mimic.AreaStatus(2, 12, 0, 10, 10)]),
+                                     [jomni_mimic.AreaStatus(2, 12, 0, 10,
+                                                             10)]),
             jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_AREA,
                                      [jomni_mimic.AreaStatus(3, 2, 0, 0, 0)])]

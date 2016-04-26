@@ -89,9 +89,10 @@ def logging(plugin_module):
 def connection(plugin_module):
     """ reload connection.py to clear its internal state """
     connection = plugin_module.connection
+    old_connection_error = plugin_module.connection.ConnectionError
     reload(connection)
     plugin_module.Connection = connection.Connection
-    plugin_module.ConnectionError = connection.ConnectionError
+    connection.ConnectionError = old_connection_error
     assert connection.Connection.gateway is None
     assert not connection.Connection.threads
     return connection

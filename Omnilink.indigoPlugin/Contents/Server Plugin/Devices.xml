@@ -79,11 +79,6 @@
 <Device type="custom" id="omniControllerDevice">
   <Name>Omni Controller</Name>
   <States>
-    <State id="connected">
-      <ValueType>Boolean</ValueType>
-      <TriggerLabel>Connected:</TriggerLabel>
-      <ControlPageLabel>Connected:</ControlPageLabel>
-    </State>
     <State id="model">
       <ValueType>String</ValueType>
       <TriggerLabel>Model:</TriggerLabel>
@@ -154,10 +149,8 @@
       <TriggerLabel>Code is Duress Code:</TriggerLabel>
       <ControlPageLabel>Code is Duress Code:</ControlPageLabel>
     </State>
-    <UiDisplayStateId>connected</UiDisplayStateId>
   </States>
 </Device>
-    
 <DeviceFactory>
   <Name>Define Omni System Device Group</Name>
   <ButtonTitle>Close</ButtonTitle>

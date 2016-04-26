@@ -96,18 +96,19 @@ def test_device_start_comm_succeeds_on_valid_input(
         plugin.deviceStartComm(dev)
 
     for dev in area_devices:
-        assert dev.error_state is None
+        assert dev.errorState is None
         right_answers = req_object_props_area_states[dev.name]
         for k, v in right_answers.items():
             assert dev.states[k] == v
 
-def test_device_start_comm_sets_error_state_on_connection_error(
+
+def test_device_start_comm_sets_errorState_on_connection_error(
         indigo, py4j, plugin, omni1, area_devices):
     dev = indigo.devices["First Area"]
     omni1.reqObjectStatus.side_effect = py4j.protocol.Py4JError
 
     plugin.deviceStartComm(dev)
-    assert dev.error_state is not None
+    assert dev.errorState is not None
 
 
 def test_remove_devices_removes_area_devices(plugin, indigo, area_devices,
@@ -125,14 +126,15 @@ def test_notification_changes_device_state(plugin, indigo, area_devices,
     assert dev.states["mode"] == "Off"
     assert not plugin.errorLog.called
 
-    status_msg = jomni_mimic.ObjectStatus(jomnilinkII.Message.OBJ_TYPE_AREA,
-                                          [jomni_mimic.AreaStatus(2, 2, 0, 0, 0)])
+    status_msg = jomni_mimic.ObjectStatus(
+        jomnilinkII.Message.OBJ_TYPE_AREA,
+        [jomni_mimic.AreaStatus(2, 2, 0, 0, 0)])
 
     omni1._notify("objectStausNotification", status_msg)
     helpers.run_concurrent_thread(plugin, 1)
 
     assert dev.states["mode"] == "Night"
-    assert dev.error_state is None
+    assert dev.errorState is None
 
 
 def test_notification_ignores_non_area_notifications(plugin, indigo, omni1,
@@ -148,7 +150,7 @@ def test_notification_ignores_non_area_notifications(plugin, indigo, omni1,
     assert dev.states["mode"] == "Off"
 
 
-def test_disconnect_notification_sets_error_state_of_correct_area_device(
+def test_disconnect_notification_sets_errorState_of_correct_area_device(
         plugin, indigo, area_devices, device_factory_fields,
         omni2, area_devices_2, device_factory_fields_2):
 
@@ -162,15 +164,15 @@ def test_disconnect_notification_sets_error_state_of_correct_area_device(
     helpers.run_concurrent_thread(plugin, 1)
 
     for dev in area_devices:
-        assert dev.error_state is None
+        assert dev.errorState is None
     for dev in area_devices_2:
-        assert dev.error_state is not None
+        assert dev.errorState is not None
 
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
 
 
-def test_reconnect_notification_clears_device_error_state(
+def test_reconnect_notification_clears_device_errorState(
         plugin, indigo, area_devices, omni1, patched_datetime):
     for dev in area_devices:
         plugin.deviceStartComm(dev)
@@ -184,7 +186,7 @@ def test_reconnect_notification_clears_device_error_state(
 
     # now the device should be in the error state
     for dev in area_devices:
-        assert dev.error_state is not None
+        assert dev.errorState is not None
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
 
@@ -199,7 +201,7 @@ def test_reconnect_notification_clears_device_error_state(
     helpers.run_concurrent_thread(plugin, 1)
 
     for dev in area_devices:
-        assert dev.error_state is None
+        assert dev.errorState is None
 
 
 def test_device_stop_comm_succeeds(indigo, plugin, area_devices):

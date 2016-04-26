@@ -153,7 +153,7 @@ def mock_indigo(xmls):
             self.states = {}
             self.configured = True
             self.enabled = True
-            self.error_state = None
+            self.errorState = None
             self.model = ""
             self.subModel = ""
 
@@ -167,7 +167,7 @@ def mock_indigo(xmls):
             self.states[key] = value
 
         def setErrorStateOnServer(self, msg):
-            self.error_state = msg
+            self.errorState = msg
 
         def replacePluginPropsOnServer(self, props):
             self.pluginProps = props
