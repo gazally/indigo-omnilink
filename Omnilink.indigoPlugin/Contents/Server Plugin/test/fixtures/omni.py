@@ -333,9 +333,10 @@ def omni_unit_types():
 @pytest.fixture
 def omni_area_props(jomnilinkII_message):
     mtype = jomnilinkII_message.MESG_TYPE_OBJ_PROP
-    return [jomni_mimic.AreaProperties(mtype, "First Area", 1, 10, 20, True),
-            jomni_mimic.AreaProperties(mtype, "", 2, 30, 40, True),
-            jomni_mimic.AreaProperties(mtype, "", 3, 0, 0, False)]
+    return [jomni_mimic.AreaProperties(mtype, "First Area", 1, 10, 20, 0, 0,
+                                       True),
+            jomni_mimic.AreaProperties(mtype, "", 2, 30, 40, 0, 0, True),
+            jomni_mimic.AreaProperties(mtype, "", 3, 0, 0, 0, 0, False)]
 
 
 @pytest.fixture(scope="session")

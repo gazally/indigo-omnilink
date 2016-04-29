@@ -28,6 +28,7 @@ from py4j.protocol import Py4JError
 
 import extensions
 from connection import ConnectionError
+from properties import AreaProperties, AreaStatus, ControllerProps
 
 log = logging.getLogger(__name__)
 
@@ -96,14 +97,17 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
 
     def update_device_from_status(self, dev, status):
         """ In addition to updating the device from a status, save the
-        current time so that timer countdowns can be done """
+        current time so that timer countdowns can be done, and test if any
+        of the alarm states have changed """
+        self.set_timer_timestamps(dev, status)
+        extensions.DeviceMixin.update_device_from_status(self, dev, status)
+
+    def set_timer_timestamps(self, dev, status):
         newstates = status.device_states()
         for s in ["entryTimer", "exitTimer"]:
             if newstates[s]:
                 self.timestamps[dev.id][s] = (newstates[s],
                                               datetime.datetime.now())
-        extensions.DeviceMixin.update_device_from_status(self, dev, status)
-
     authority = {0: "Invalid",
                  1: "Master",
                  2: "Manager",
@@ -268,9 +272,6 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
             log.error("Old version of Check Security Code action. "
                       "Please delete and re-create it. ")
             return
-        if "code" not in action.props:
-            log.error("armSecuritySystem action not configured")
-            return
 
         code = self.plugin.substitute(action.props.get("code", ""))
         area = dev.pluginProps["number"]
@@ -384,11 +385,8 @@ class AreaInfo(extensions.Info):
                              for num, ap in self.props.items())))
 
     def _get_controller_type(self):
-        modelnum = self.connection.omni.reqSystemInformation().getModel()
-        if modelnum == 36 or modelnum == 37:
-            return "Lumina"
-        else:
-            return "Omni"
+        props = ControllerProps(self.connection)
+        return props.base_model
 
     def _get_maximum_user_number(self):
         M = self.connection.jomnilinkII.Message
@@ -455,68 +453,3 @@ class AreaInfo(extensions.Info):
             say(fmt.format(num, ap.name, ap.entry_delay, ap.exit_delay,
                            s.entry_timer, s.exit_timer, s.mode) +
                 ", ".join(s.alarms))
-
-
-class AreaProperties(extensions.Props):
-    """ AreaProperties class, represents Omni  area properties """
-    def __init__(self, omni_props):
-        """ Construct a AreaProperties object from the jomnilinkII
-        Area Properties object.
-        """
-        self.number = omni_props.getNumber()
-        self.name = omni_props.getName()
-        if not self.name:
-            self.name = "Area {0}".format(self.number)
-        self.enabled = omni_props.isEnabled()
-        self.exit_delay = omni_props.getExitDelay()
-        self.entry_delay = omni_props.getEntryDelay()
-        self.device_type = "omniAreaDevice"
-        self.type_name = "Area"
-
-    def device_states(self):
-        return {"name": self.name,
-                "exitDelay": self.exit_delay,
-                "entryDelay": self.entry_delay}
-
-
-class AreaStatus(extensions.Status):
-    """ AreaStatus class, represents Omni Area status """
-    def __init__(self, controller_type, omni_status):
-        """ Construct a AreaStatus object from a jomnilinkII
-        Area Status object. """
-        mode = omni_status.getMode()
-
-        self.mode = self.mode_names[controller_type].get(
-            mode & self.mode_delay_mask, "Unknown")
-        if mode & self.mode_delay_bit:
-            change_delay = "Arming" if controller_type == "Omni" else "Setting"
-            self.mode = change_delay + " " + self.mode
-
-        alarms = omni_status.getAlarms()
-        self.alarms = []
-        for i, alarm in enumerate(self.alarm_names):
-            if alarms & 1 << i:
-                self.alarms.append(alarm)
-
-        self.entry_timer = omni_status.getEntryTimer()
-        self.exit_timer = omni_status.getExitTimer()
-
-    def device_states(self):
-        results = {"mode": self.mode,
-                   "entryTimer": self.entry_timer,
-                   "exitTimer": self.exit_timer}
-        for alarm in self.alarm_names:
-            results["alarm" + alarm] = alarm in self.alarms
-        return results
-
-    mode_names = {"Omni": {0: "Off", 1: "Day", 2: "Night",
-                           3: "Away", 4: "Vacation", 5: "Day Instant",
-                           6: "Night Delayed"},
-                  "Lumina": {1: "Home", 2: "Sleep", 3: "Away",
-                             4: "Vacation", 5: "Party", 6: "Special"}
-                  }
-    mode_delay_bit = 0b1000
-    mode_delay_mask = 0b0111
-
-    alarm_names = ["Burglary", "Fire", "Gas", "Auxiliary", "Freeze", "Water",
-                   "Duress", "Temperature"]

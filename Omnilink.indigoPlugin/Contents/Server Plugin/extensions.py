@@ -259,7 +259,8 @@ class DeviceMixin(object):
 
         # for each device contains a dict
         # which maps event type -> list of triggers
-        self.triggers = {}
+
+        self.triggers = defaultdict(lambda: defaultdict(list))
 
         self.reports = {}
         for report_name in info_class.reports:
@@ -362,14 +363,13 @@ class DeviceMixin(object):
         self.log.debug('Starting device "{0}"'.format(device.name))
         if device.id not in self.device_ids[device.deviceTypeId]:
             self.device_ids[device.deviceTypeId].append(device.id)
-            self.triggers[device.id] = defaultdict(list)
             self.update_device_status(device)
 
     def deviceStopComm(self, device):
         if device.id in self.device_ids[device.deviceTypeId]:
             self.log.debug('Stopping device "{0}"'.format(device.name))
             self.device_ids[device.deviceTypeId].remove(device.id)
-            del self.triggers[device.id]
+            self.triggers[device.id].clear()
 
     def update_device_version(self, device):
         pass
@@ -532,34 +532,6 @@ class Info(object):
         cmd = getattr(self.connection.jomnilinkII.MessageTypes.CommandMessage,
                       cmd_name)
         self.connection.omni.controllerCommand(cmd, param1, param2)
-
-
-class Props(object):
-    """ Stores configuration information for one object defined
-    by an Omni controller.
-
-    required attributes:
-        device_type -- an Indigo device type id
-        type_name -- display name of device type id
-        name -- a name for the device
-        number -- number of device used by Omni
-
-    required methods:
-        device_states -- return a dictionary of device states to set
-            for this object
-    """
-    pass
-
-
-class Status(object):
-    """ Stores status information for one object defined by an
-    Omni controller.
-
-    required methods:
-    device_states -- return a dictionary of device states to set
-        for the object.
-    """
-    pass
 
 
 @contextmanager

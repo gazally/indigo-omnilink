@@ -89,7 +89,8 @@ UnitProperties = build_java_class_mimic(
 
 AreaProperties = build_java_class_mimic(
     "AreaProperties",
-    ["MessageType", "Name", "Number", "EntryDelay", "ExitDelay"], ["Enabled"])
+    ["MessageType", "Name", "Number", "EntryDelay", "ExitDelay", "Mode",
+     "Alarms"], ["Enabled"])
 
 EndOfData = build_java_class_mimic("EndOfData", ["MessageType"])
 

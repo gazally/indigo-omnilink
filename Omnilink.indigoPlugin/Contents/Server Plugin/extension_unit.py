@@ -25,6 +25,7 @@ from py4j.protocol import Py4JError
 
 import extensions
 from connection import ConnectionError
+from properties import UnitProperties, UnitStatus
 
 log = logging.getLogger(__name__)
 
@@ -207,60 +208,3 @@ class UnitInfo(extensions.Info):
             else:
                 status = str(status)
             say(fmt.format(num, up.name, up.type_name, us.time, status))
-
-
-class UnitProperties(extensions.Props):
-    """ UnitProperties class, represents Omni control unit properties """
-    def __init__(self, omni_props):
-        """ Construct a UnitProperties object from the jomnilinkII
-        Unit Properties object.
-        """
-        self.name = omni_props.getName()
-        self.number = omni_props.getNumber()
-        unit_type = omni_props.getUnitType()
-        self.device_type, self.type_name = \
-            self.device_types.get(
-                unit_type, ("", "Unknown Unit Type {0}".format(unit_type)))
-        self.has_brightness = self.device_type not in self.relay_device_types
-
-    def device_states(self):
-        """ Return device states to update based on properties """
-        return {"name": self.name}
-
-    device_types = {
-        1: ("omniStandardUnit",     "Standard Control"),
-        2: ("omniExtendedUnit",     "Extended Control"),
-        3: ("omniComposeUnit",      "Compose Control"),
-        4: ("omniUPBUnit",          "UPB Control"),
-        5: ("omniHLCRoomUnit",      "HLC Room Control"),
-        6: ("omniHLCLoadUnit",      "HLC Load Control"),
-        7: ("omniLuminaModeUnit",   "Lumina Mode Control"),
-        8: ("omniRadioRAUnit",      "Radio RA Control"),
-        9: ("omniCentraLiteUnit",   "CentraLite Control"),
-        10: ("omniViziaRFRoomUnit", "Vizia RF Room Control"),
-        11: ("omniViziaRFLoadUnit", "Vizia RF Load Control"),
-        12: ("omniFlagUnit",        "Omni Controller Flag"),
-        13: ("omniVoltageUnit",     "Voltage Output Control"),
-        14: ("omniAudioZoneUnit",   "Audio Zone Control"),
-        15: ("omniAudioSourceUnit", "Audio Source Control"),
-    }
-    relay_device_types = ["omniFlagUnit", "omniVoltageUnit",
-                          "omniAudioZoneUnit", "omniAudioSourceUnit"]
-
-
-class UnitStatus(extensions.Status):
-    """ UnitStatus class, represents Omni Unit status """
-    def __init__(self, has_brightness, omni_status):
-        """ Construct a UnitStatus object from a jomnilinkII
-        Unit Status object. """
-        self.status = omni_status.getStatus()
-        self.time = omni_status.getTime()
-        self.has_brightness = has_brightness
-
-    def device_states(self):
-        """ Return device states to update based on status """
-        result = {"onOffState": self.status != 0,
-                  "timeLeftSeconds": self.time}
-        if self.has_brightness:
-            result["brightnessLevel"] = self.status
-        return result

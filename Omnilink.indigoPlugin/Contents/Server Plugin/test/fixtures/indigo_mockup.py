@@ -101,8 +101,8 @@ def mock_indigo(xmls):
 
         @classmethod
         def _reset(cls):
-            _dev_id = 1000
-            devices = IndigoDictForTest()
+            cls._dev_id = 1000
+            cls.devices.clear()
 
         @classmethod
         def _get_device_defn(cls, device_type):
@@ -151,6 +151,9 @@ def mock_indigo(xmls):
             self.name = name
             self.pluginProps = dict(props)
             self.states = {}
+            for key in DeviceForTest._get_device_state_list(
+                    deviceTypeId):
+                self.states[key] = ""
             self.configured = True
             self.enabled = True
             self.errorState = None

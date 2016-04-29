@@ -26,6 +26,7 @@ import indigo
 from py4j.protocol import Py4JError
 
 import extensions
+from properties import ControllerProps, ControllerStatus, AreaStatus
 
 log = logging.getLogger(__name__)
 
@@ -51,12 +52,15 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
                                    "digitalCommunicatorModuleTrouble",
                                    "digitalCommunicatorModuleOK",
                                    "energyCostLow", "energyCostMid",
-                                   "energyCostHigh", "energyCostCritical"]}
+                                   "energyCostHigh", "energyCostCritical",
+                                   "alarm"]}
         self.callbacks = {
             "generateConsoleList": self.generateConsoleList,
             "enableConsoleBeeper": self.enableDisableConsoleBeeper,
             "disableConsoleBeeper": self.enableDisableConsoleBeeper,
-            "sendBeepCommand": self.sendBeepCommand
+            "sendBeepCommand": self.sendBeepCommand,
+            "generateAlarmTypeList": self.generateAlarmTypeList,
+            "controllerIdChanged": self.controllerIdChanged
         }
 
         extensions.DeviceMixin.__init__(self, ControllerInfo, log)
@@ -89,6 +93,31 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
         pass
 
     # ----- Callbacks from OMNI Status and events ----- #
+
+    def status_notification(self, connection, status_msg):
+        Message = connection.jomnilinkII.Message
+        if status_msg.getStatusType() != Message.OBJ_TYPE_AREA:
+            return
+
+        status = status_msg.getStatuses()[0]
+        info = self.info(connection.url)
+        existing_alarms = info.get_alarm_set()
+        info.update_alarm(status)
+
+        new_alarms = info.get_alarm_set().difference(existing_alarms)
+        if new_alarms:
+            self.run_triggers_on_new_alarms(connection, new_alarms)
+
+    def run_triggers_on_new_alarms(self, connection, alarms):
+        log.debug("Controller at {0} has alarm: {1}".format(
+            connection.url, ", ".join(list(alarms))))
+
+        for dev in self.devices_from_url(connection.url):
+            triggers = self.triggers[dev.id]
+            for t in triggers["alarm"]:
+                trig_alarms = set(indigo.triggers[t].pluginProps["alarmTypes"])
+                if alarms.intersection(trig_alarms):
+                    indigo.trigger.execute(t)
 
     notification_mask = 0xFF00
     event_mask = 0x00FF
@@ -240,6 +269,41 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
                           action.props["consoleNumber"],
                           action.props["beepCommand"]))
 
+    # ----- Event Config UI ----- #
+
+    def controllerIdChanged(self, values, type_id, event_id):
+        """ If this doesn't exist, generateAlarmTypeList won't get called. """
+        return values
+
+    def generateAlarmTypeList(self, filter, values, type_id, event_id):
+        """ Generate list of possible alarms, which will be different
+        for Omni and Lumina controllers.
+        """
+        log.debug("generateAlarmTypeList called, {0}, {1}, {2}, {3}".format(
+            filter, values, type_id, event_id))
+        results = []
+        dev_id = int(values.get("controllerId", 0))
+        if dev_id:
+            device = indigo.devices[dev_id]
+            with extensions.comm_error_logging(log):
+                info = self.info(device.pluginProps["url"])
+                results = zip(AreaStatus.alarm_names, AreaStatus.alarm_names)
+                if info.props[1].base_model == "Lumina":
+                    # Lumina only has freeze, water, temp
+                    results = [results[4], results[5], results[7]]
+
+        return results
+
+    def validateEventConfigUi(self, values, type_id, event_id):
+        errors = indigo.Dict()
+        if not values.get("controllerId", 0):
+            errors["controllerId"] = "Please select a controller device"
+
+        if type_id == "alarm" and not values.get("alarmTypes", []):
+            errors["alarmTypes"] = ("Please select one or more alarm "
+                                    "types to monitor")
+        return (not errors, values, errors)
+
 
 class ControllerInfo(extensions.Info):
     """ Get the area info from the Omni device, and assist
@@ -266,6 +330,35 @@ class ControllerInfo(extensions.Info):
         """
         self.connection = connection
         self.props = {1: ControllerProps(connection)}
+
+        # key is area, value is list of alarm types currently active
+        self.alarms = {}
+
+        self.update_alarms()
+
+    def update_alarms(self):
+        Message = self.connection.jomnilinkII.Message
+        ObjectProps = self.connection.jomnilinkII.MessageTypes.ObjectProperties
+        objnum = 0
+        while True:
+            m = self.connection.omni.reqObjectProperties(
+                Message.OBJ_TYPE_AREA, objnum, 1,
+                ObjectProps.FILTER_1_NAMED_UNAMED, ObjectProps.FILTER_2_NONE,
+                ObjectProps.FILTER_3_NONE)
+            if m.getMessageType() != Message.MESG_TYPE_OBJ_PROP:
+                break
+            objnum = m.getNumber()
+            if m.isEnabled():
+                self.update_alarm(m)
+
+    def update_alarm(self, m):
+        self.alarms[m.getNumber()] = AreaStatus.decode_alarms(m.getAlarms())
+
+    def get_alarm_set(self):
+        results = set()
+        for alarms in self.alarms.values():
+            results = results.union(set(alarms))
+        return results
 
     def number_and_status_from_notification(self, status_msg):
         return None, None
@@ -397,7 +490,7 @@ class ControllerInfo(extensions.Info):
         if etype in self.events:
             event, pn1, pn2 = self.events[etype]
         else:
-            model = "Lumina" if "Lumina" in self.props[1].model else "Omni"
+            model = self.props[1].base_model
             event, pn1, pn2 = self.modes[model].get(
                 etype, ("Unknown", "Unused", "Unused"))
 
@@ -477,68 +570,3 @@ class ControllerInfo(extensions.Info):
         elif pname == "Type":
             return self.alarm_types.get(p, "Unknown")
         return p
-
-
-class ControllerProps(extensions.Props):
-    def __init__(self, connection):
-        info = connection.omni.reqSystemInformation()
-        self.model, self.firmware = self._decode_system_info(info)
-        self.connection = connection
-        self.device_type = "omniControllerDevice"
-        self.name = "Controller"
-        self.number = 1
-        self.type_name = "Controller"
-
-    def _decode_system_info(self, info):
-        model = self.models.get(info.getModel(), "Unknown")
-        major = info.getMajor()
-        minor = info.getMinor()
-        revision_number = info.getRevision()
-        if revision_number == 0:
-            # no revision number
-            revision = ""
-        elif revision_number < 26:
-            # revisions a through z
-            revision = chr(ord('a') + revision_number - 1)
-        else:
-            # prototype revisions X1, X2 etc.
-            revision = "X" + str(256 - revision_number)
-        firmware = "{0}.{1}{2}".format(major, minor, revision)
-        return model, firmware
-
-    def device_states(self):
-        return {"model": self.model,
-                "firmwareVersion": self.firmware}
-
-    models = {30: "HAI Omni IIe",
-              16: "HAI OmniPro II",
-              36: "HAI Lumina",
-              37: "HAI Lumina Pro",
-              38: "HAI Omni LTe"}
-
-
-class ControllerStatus(extensions.Status):
-    def __init__(self, connection):
-        status = connection.omni.reqSystemStatus()
-        self.battery_reading = status.getBatteryReading()
-
-        troubles = connection.omni.reqSystemTroubles()
-        self.troubles = self._decode_troubles(troubles)
-
-    def _decode_troubles(self, troubles):
-        trouble_states = {}
-        for t in self.trouble_names:
-            trouble_states[t] = False
-        for t in troubles.getTroubles():
-            trouble_states[self.trouble_names[t - 1]] = True
-        return trouble_states
-
-    def device_states(self):
-        result = {"batteryReading": self.battery_reading}
-        for t, value in self.troubles.items():
-            result[t] = value
-        return result
-
-    trouble_names = ["freezeTrouble", "batteryLowTrouble", "ACPowerTrouble",
-                     "phoneLineTrouble", "digitalCommunicatorTrouble",
-                     "fuseTrouble", "freezeTrouble", "batteryLowTrouble"]

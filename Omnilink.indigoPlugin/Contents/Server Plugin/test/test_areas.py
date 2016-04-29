@@ -416,6 +416,7 @@ def test_check_security_code_handles_network_error(
     assert not dev.states["lastCheckedCodeDuress"]
 
 
+
 def test_concurrent_thread_counts_down_timers(
         plugin, indigo, jomnilinkII, omni1, area_devices, patched_datetime):
     dev = indigo.devices["Area 2"]

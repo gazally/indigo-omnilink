@@ -113,9 +113,9 @@ def test_create_devices_creates_only_one_controller(indigo, plugin,
 
     plugin.createDevices(values,
                          [dev.id for dev in indigo.devices.iter()])
+
     assert len([dev for dev in indigo.devices.iter()
                 if dev.deviceTypeId == "omniControllerDevice"]) == 1
-
     plugin.createDevices(values,
                          [dev.id for dev in indigo.devices.iter()])
     assert len([dev for dev in indigo.devices.iter()
@@ -385,3 +385,72 @@ def test_send_keypad_beep_handles_unconfigured_action(
 
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()
+
+
+
+def test_generate_alarm_type_list_handles_different_controllers(
+        plugin, indigo, omni1, omni2, controller_device,
+        second_controller_device):
+    plugin.deviceStartComm(controller_device)
+    dev_id = controller_device.id
+
+    values = {"controllerId": str(dev_id)}
+    plugin.getEventConfigUiValues(values, "alarm", 0)
+    tups = plugin.generateAlarmTypeList(None, values, "alarm", 0)
+    assert len(tups) == 8
+    assert ("Burglary", "Burglary") in tups
+
+    plugin.deviceStartComm(second_controller_device)
+    dev_id = second_controller_device.id
+
+    values = {"controllerId": str(dev_id)}
+    plugin.getEventConfigUiValues(values, "alarm", 0)
+    tups = plugin.generateAlarmTypeList(None, values, "alarm", 0)
+    assert len(tups) == 3
+    assert ("Burglary", "Burglary") not in tups
+    assert ("Water", "Water") in tups
+
+
+@pytest.fixture
+def alarm_trigger(plugin, started_controller_device):
+    """ Create and start an alarm trigger """
+    dev = started_controller_device
+
+    trigger = Mock()
+    trigger.id = 1
+    trigger.pluginTypeId = "alarm"
+    trigger.pluginProps = {"controllerId": unicode(dev.id),
+                           "alarmTypes": ["Burglary", "Fire"]}
+    plugin.triggerStartProcessing(trigger)
+    return trigger
+
+
+@pytest.fixture
+def alarm_trigger_event():
+    """ return a message matching the trigger """
+    event_msg = jomni_mimic.AreaStatus(1, 1, 2, 0, 0)
+    return event_msg
+
+
+@pytest.fixture
+def alarm_trigger_non_event():
+    """ return a message that doesn't match the trigger """
+    mismatch_msg = jomni_mimic.AreaStatus(1, 1, 128, 0, 0)
+    return mismatch_msg
+
+
+def test_status_notification_executes_trigger(
+        plugin, omni1, indigo, jomnilinkII, alarm_trigger,
+        alarm_trigger_non_event, alarm_trigger_event):
+    indigo.triggers.__getitem__.return_value = alarm_trigger
+    status_msg = jomni_mimic.ObjectStatus(jomnilinkII.Message.OBJ_TYPE_AREA,
+                                          [alarm_trigger_non_event])
+    omni1._notify("objectStausNotification", status_msg)
+    helpers.run_concurrent_thread(plugin, 1)
+    assert not indigo.trigger.execute.called
+
+    status_msg = jomni_mimic.ObjectStatus(jomnilinkII.Message.OBJ_TYPE_AREA,
+                                          [alarm_trigger_event])
+    omni1._notify("objectStausNotification", status_msg)
+    helpers.run_concurrent_thread(plugin, 1)
+    assert indigo.trigger.execute.called

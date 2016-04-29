@@ -1,3 +1,23 @@
+<Event id="alarm">
+  <Name>Alarm</Name>
+  <ConfigUI>
+    <Field id="controllerId" type="menu">
+      <Label>Omni Controller:</Label>
+      <List class="indigo.devices" filter="self.omniControllerDevice"/>
+      <CallbackMethod>controllerIdChanged</CallbackMethod>
+    </Field>
+    <Field id="alarmTypes" type="list">
+      <Label>Alarms:</Label>
+      <List class="self" filter="" method="generateAlarmTypeList" dynamicReload="true"/>
+   </Field>
+    <Field id="info" type="label" alignWithControl="true" fontSize="small">
+      <Label>You may select more than one alarm type for this trigger.</Label>
+    </Field>
+  </ConfigUI>
+</Event>
+
+<Event id="sep"/>
+
 <Event id="phoneLineDead">
   <Name>Phone Line Dead</Name>
   <ConfigUI>
@@ -136,5 +156,3 @@
     </Field>
   </ConfigUI>
 </Event>
-
-
