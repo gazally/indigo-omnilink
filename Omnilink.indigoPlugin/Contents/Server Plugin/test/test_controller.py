@@ -202,81 +202,6 @@ def test_reconnect_notification_clears_device_errorState(
     assert started_controller_device.errorState is None
 
 
-def test_validate_action_config_ui_uses_substitute_check(
-        plugin, controller_device, monkeypatch, indigo):
-    values = {}
-    plugin.getActionConfigUiValues(values, "checkSecurityCode",
-                                   controller_device.id)
-
-    sub = Mock(return_value=(True, ""))
-    monkeypatch.setattr(indigo.PluginBase, "substitute", sub)
-    values["code"] = "%%blahblah"
-    values["area"] = "%%blahblah"
-    tup = plugin.validateActionConfigUi(values, "checkSecurityCode", 1)
-
-    assert tup[0]
-    assert not tup[2]
-    assert sub.call_count == 2
-
-
-def test_validate_action_config_ui_catches_obvious_errors(
-        plugin, controller_device):
-    values = {}
-    plugin.getActionConfigUiValues(values, "checkSecurityCode",
-                                   controller_device.id)
-    test_values = [("123A", "hello"), ("", ""), ("0", "0")]
-    for code, area in test_values:
-        values["code"] = code
-        values["area"] = area
-        tup = plugin.validateActionConfigUi(values, "checkSecurityCode", 1)
-        assert not tup[0]
-        assert "code" in tup[2]
-        assert "area" in tup[2]
-
-
-def test_check_security_code_updates_device_states_on_valid_code(
-        plugin, started_controller_device, omni1, version):
-    dev = started_controller_device
-    mock_scv = jomni_mimic.SecurityCodeValidation(16, 2)
-    omni1.reqSecurityCodeValidation = Mock(return_value=mock_scv)
-
-    action = Mock()
-    action.deviceId = dev.id
-    action.props = {"code": "9876", "area": "1", "actionVersion": version}
-
-    plugin.checkSecurityCode(action)
-
-    omni1.reqSecurityCodeValidation.assert_called_with(1, 9, 8, 7, 6)
-    assert dev.states["lastCheckedCode"] == action.props["code"]
-    assert dev.states["lastCheckedCodeArea"] == action.props["area"]
-    assert dev.states["lastCheckedCodeAuthority"] == "Manager"
-    assert dev.states["lastCheckedCodeUser"] == 16
-    assert not dev.states["lastCheckedCodeDuress"]
-
-
-def test_check_security_code_handles_network_error(
-        plugin, started_controller_device, omni1, py4j, version):
-    dev = started_controller_device
-    omni1.reqSecurityCodeValidation = Mock(
-        side_effect=py4j.protocol.Py4JError)
-
-    action = Mock()
-    action.deviceId = dev.id
-    action.props = {"code": "9876", "area": "1", "actionVersion": version}
-    assert not plugin.errorLog.called
-
-    plugin.checkSecurityCode(action)
-
-    assert plugin.errorLog.called
-    plugin.errorLog.reset_mock()
-
-    assert dev.states["lastCheckedCode"] == action.props["code"]
-    assert dev.states["lastCheckedCodeArea"] == action.props["area"]
-    assert dev.states["lastCheckedCodeAuthority"] == "Error"
-    assert dev.states["lastCheckedCodeUser"] == "N/A"
-    assert not dev.states["lastCheckedCodeDuress"]
-
-
 def test_trigger_start_processing_handles_unconfigured_trigger(
         plugin, started_controller_device):
     trigger = Mock()
@@ -335,10 +260,11 @@ def test_other_event_notification_ignores_message_for_stopped_device(
 def test_generate_keypad_list_checks_keypad_count(
         plugin, omni1, started_controller_device, jomnilinkII):
 
+    omni1.reqObjectTypeCapacities = Mock()
     omni1.reqObjectTypeCapacities.return_value.getCapacity.return_value = 8
 
     values = {}
-    plugin.getActionConfigUiValues(values, "checkSecurityCode",
+    plugin.getActionConfigUiValues(values, "enableConsoleBeeper",
                                    started_controller_device.id)
     tups = plugin.generateConsoleList(None, values,
                                       "enableConsoleBeeper",

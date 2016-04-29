@@ -122,3 +122,7 @@ EventLogData = build_java_class_mimic(
     ["MessageType", "EventNumber", "Month", "Day", "Hour",
      "Minute", "EventType", "Parameter1", "Parameter2"],
     ["TimeDataValid"])
+
+ObjectTypeCapacities = build_java_class_mimic(
+    "ObjectTypeCapacities",
+    ["Capacity"])

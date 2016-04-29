@@ -1,21 +1,46 @@
 ## indigo-omnilink
-An Indigo Domotics plugin to enable Indigo to communicate over Ethernet with HAI/Leviton Omni systems.
 
-This plugin is a work in progress. Please only use it if you don't mind using software that is partially complete, subject to change and undoubtedly buggy. I've been working with it on OS X El Capitan, Indigo versions 6.1.4-6.1.7, and have tried it with an Omni IIe running firmware version 3.15 and an Omni LTe with firmware version 3.12.
+An Indigo Domotics plugin to enable Indigo to communicate over
+Ethernet with HAI/Leviton Omni systems. HAI/Leviton Lumima systems
+use the same communication protocol, and should also
+work with this plugin.
 
-Omni systems have many more capabilities than I knew about when I started this project. So far the plugin can gather information from the controller, monitor the status of its security zones, and turn control units on and off.
+This plugin is a work in progress. Please only use it if you don't
+mind using software that is partially complete, subject to change and
+undoubtedly buggy. I've been working with it on OS X El Capitan,
+Indigo versions 6.1.4-6.1.7, and have tried it with an Omni IIe
+running firmware version 3.15 and an Omni LTe with firmware version
+3.12.
+
+Omni systems have many more capabilities than I knew about when I
+started this project. So far the plugin can gather information from
+the controller, monitor the status of its security zones, arm and
+disarm security areas, and turn control units (switches and relays) on
+and off.
 
 ### Before you start
 
-If your Omni system is running an old firmware version, it may not be able to communicate over the Ethernet, in spite of having an Ethernet connector on the board. My ten-year old Omni IIe board was running version 2.12 which did not have Ethernet support and I was able to purchase version 3.15 in chip format from homecontrols.com.
+If your Omni system is running an old firmware version, it may not be
+able to communicate over the Ethernet, in spite of having an Ethernet
+connector on the board. My ten-year old Omni IIe board was running
+version 2.12 which did not have Ethernet support and I was able to
+purchase version 3.15 in chip format from homecontrols.com.
 
-According to a HAI press release which I found on Google, Ethernet support was a new feature in firmware version 2.4.
+According to a HAI press release which I found on Google, Ethernet
+support was a new feature in firmware version 2.4.
 
 More recent Omni systems upgrade their firmware by download instead of by chip.
 
-Once you have checked or updated your firmware, use your Omni keypad to go into the Setup menu and find the settings for IP Address, port and encryption keys. You should set the IP address to a unique address on your home network, and copy down the port number and encryption keys because you will need to type them into Indigo.  If you or the installer of your system have set up Leviton's Snap-Link app, this plugin uses the same configuration information as Snap-Link.
+Once you have checked or updated your firmware, use your Omni keypad
+to go into the Setup menu and find the settings for IP Address, port
+and encryption keys. You should set the IP address to a unique address
+on your home network, and copy down the port number and encryption
+keys because you will need to type them into Indigo.  If you or the
+installer of your system have set up Leviton's Snap-Link app, this
+plugin uses the same configuration information as Snap-Link.
 
-The plugin beginning with version 0.3.0 will store your encryption key in your keychain.
+The plugin beginning with version 0.3.0 will store your encryption key
+in your keychain.
 
 ### Installing the plugin
 
@@ -25,7 +50,109 @@ The plugin beginning with version 0.3.0 will store your encryption key in your k
 
 ### Creating devices for your Omni System
 
-From the Indigo main window, choose Devices and then New... On the Device Type List, choose OmniLink, and the OmniLink device configuration window will pop up. Enter the IP Address, port number and two encryption keys that you copied down from your Omni keypad, and press the Connect button. If you got that all correct and your firmware version is new enough and your Omni board is actually plugged into your router, then the available device types should appear in your Device Types list. Select Controller to create a main device for your system, Zone to create devices for your security system zones, and Unit if you want devices for your light switches and relays. After you have made your selections, choose the Create Devices button.
+From the Indigo main window, choose Devices and then New... On the
+Device Type List, choose OmniLink, and the OmniLink device
+configuration window will pop up. Enter the IP Address, port number
+and two encryption keys that you copied down from your Omni keypad,
+and press the Connect button. If you got that all correct and your
+firmware version is new enough and your Omni board is actually plugged
+into your router, then the available device types should appear in
+your Device Types list. Select the ones you want to create and choose
+the Create Devices button.
+
+Controller devices let you monitor the trouble status of your system,
+allow arming and disarming of all zones at once, and have actions for beeping
+or silencing the Omni keypads.
+
+Zone devices let you receive updates on the individual security zones.
+
+Area devices monitor the arming status of your security system. If your
+system is set up with multiple secure areas, you can arm and disarm them
+separately using area devices. There is also an action to ask the controller
+if a 4-digit user code is valid in an area at the current time.
+
+Control Unit devices track the relays and switches connected to your
+controller. The plugin has actions to turn them on and off as well as dim them,
+however the latter functionality is currently broken.
+
+### Scripting the OmniLink plugin
+
+To check if a security code is valid, first create Area devices. Use the
+device id of the one you want to check in place of the 12345678 below:
+
+```py
+pluginId = "me.gazally.indigoplugin.omnilink"
+omnilink = indigo.server.getPlugin(pluginId)
+if omnilink.isEnabled():
+    props = {"code" : "1234"}
+    omnilink.executeAction("checkSecurityCode", deviceId=12345678, props=props)
+```
+
+And then read the results from the device states.
+
+To arm one area in the security system, use your Area device id in this script:
+```py
+pluginId = "me.gazally.indigoplugin.omnilink"
+omnilink = indigo.server.getPlugin(pluginId)
+if omnilink.isEnabled():
+    props = {"mode" : "3",
+	         "user" : "1"}
+    omnilink.executeAction("armSecuritySystem", deviceId=12345678, props=props)
+```
+
+In the props dictionary, mode should be an integer between 0 and 7 in
+string format, and user should be the user number from the Set Up
+Codes menu on your keypad, not the four digit user code, also as a string.
+
+Arming all areas works just like arming one area, except you will need
+to use the device id of a Controller device instead of an Area device,
+and the action `armSecuritySystemAll`.
+
+Here are the meanings of the mode numbers for Omni and Lumina systems:
+
+```py
+mode_names = {"Omni": {0: "Off", 1: "Day", 2: "Night",
+                       3: "Away", 4: "Vacation", 5: "Day Instant",
+                       6: "Night Delayed"},
+              "Lumina": {1: "Home", 2: "Sleep", 3: "Away",
+                         4: "Vacation", 5: "Party", 6: "Special"}
+              }
+```
+
+To script turning on and off the Omni keypad beepers, use the device id of a
+Controller device in this script:
+
+``` py
+pluginId = "me.gazally.indigoplugin.omnilink"
+omnilink = indigo.server.getPlugin(pluginId)
+if omnilink.isEnabled():
+    props = {"consoleNumber" : "2"}
+    omnilink.executeAction("enableConsoleBeeper", deviceId=12345678, props=props)
+	# or
+    omnilink.executeAction("disableConsoleBeeper", deviceId=12345678, props=props)
+```
+
+Console numbers are small integers between 0 and the maximum number of
+consoles which you can find if you use the plugin menu command "Write
+information on connected Omni controllers to log". Unfortunately no
+information about the actual number of connected keypads is saved in
+the controller, so you will have to determine what the numbers mean by
+experimentation. If you use "0" it will send the command to all
+connected keypads.
+
+Keypads can be made to beep, also using a Controller device id:
+
+``` py
+pluginId = "me.gazally.indigoplugin.omnilink"
+omnilink = indigo.server.getPlugin(pluginId)
+if omnilink.isEnabled():
+    props = {"consoleNumber" : "1", "beepCommand": "beep1"}
+    omnilink.executeAction("sendBeepCommand", deviceId=12345678, props=props)
+
+```
+
+Possible beep commands are: "beepOff", "beepOn", "beep1", "beep2",
+"beep3", "beep4" and "beep5".
 
 ### Acknowledgements
 

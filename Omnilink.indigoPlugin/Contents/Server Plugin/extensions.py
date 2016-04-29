@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """ Plugin Extension Parent Class """
 from collections import defaultdict
+from contextlib import contextmanager
 
 import indigo
 from py4j.protocol import Py4JError
@@ -461,6 +462,8 @@ class DeviceMixin(object):
         for dev in self.devices_from_url(connection.url):
             dev.setErrorStateOnServer("not connected")
 
+    # ----- Write info to log ----- #
+
     def say_info(self, report_name, connection, say):
         self.info(connection.url).report(report_name, say)
 
@@ -479,6 +482,7 @@ class Info(object):
         number_and_status_from_notification -- given an object
                  status notification, decode it to object number
                  and status object
+        send_command -- send the controller a command
 
     utility method for use by subclasses:
         fetch_all_props -- standard loop to iterate through Omni
@@ -497,6 +501,9 @@ class Info(object):
 
         props_class -- constructor for subclass of Props which takes a
             jomnilinkII properties object
+        otype -- suffix for object type, see Message.java
+        filter1, filter2, filter3 -- string suffix for filter type,
+            see ObjectProperties.java
 
         """
         Message = connection.jomnilinkII.Message
@@ -516,6 +523,16 @@ class Info(object):
             results[objnum] = props_class(m)
         return results
 
+    def send_command(self, cmd_name, param1, param2):
+        """ Send the Omni controller a command, specified by name,
+        along with the parameter values.
+        See comments in jomnilinkII.MessageTypes.CommandMessage
+        for details.
+        """
+        cmd = getattr(self.connection.jomnilinkII.MessageTypes.CommandMessage,
+                      cmd_name)
+        self.connection.omni.controllerCommand(cmd, param1, param2)
+
 
 class Props(object):
     """ Stores configuration information for one object defined
@@ -533,6 +550,7 @@ class Props(object):
     """
     pass
 
+
 class Status(object):
     """ Stores status information for one object defined by an
     Omni controller.
@@ -542,3 +560,15 @@ class Status(object):
         for the object.
     """
     pass
+
+
+@contextmanager
+def comm_error_logging(log):
+    """ Context manager for those situations where note needs to be made in
+    the log of an error, but the logic is unchanged either way.
+    """
+    try:
+        yield
+    except (Py4JError, ConnectionError):
+        log.error("Error communicating with Omni controller")
+        log.debug("", exc_info=True)

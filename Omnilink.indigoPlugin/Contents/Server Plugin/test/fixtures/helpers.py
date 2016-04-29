@@ -43,7 +43,7 @@ def run_concurrent_thread(plugin, time_limit):
 
 class PatchableDatetime(datetime):
     """ A replacement for datetime that replaces datetime.now() """
-    not_the_actual_time = datetime(2011, 10, 9, 8, 7, 6)
+    not_the_actual_time = datetime.now()
 
     def __new__(cls, *args, **kwargs):
         return datetime.__new__(datetime, *args, **kwargs)

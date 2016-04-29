@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
 from __future__ import unicode_literals
+from datetime import datetime
 from time import sleep
 
 from mock import Mock
@@ -115,8 +116,9 @@ def test_remove_devices_removes_area_devices(plugin, indigo, area_devices,
                                              device_factory_fields):
     dev_ids = [dev.id for dev in area_devices]
     plugin.removeDevices(device_factory_fields, dev_ids)
-    for dev in indigo.devices.iter():
-        assert dev.deviceTypeId != "omniAreaDevice"
+    devs = [dev for dev in indigo.devices
+            if dev.deviceTypeId == "omniAreaDevice"]
+    assert not devs
 
 
 def test_notification_changes_device_state(plugin, indigo, area_devices,
@@ -208,3 +210,200 @@ def test_device_stop_comm_succeeds(indigo, plugin, area_devices):
     dev = indigo.devices["Area 2"]
     plugin.deviceStartComm(dev)
     plugin.deviceStopComm(dev)
+
+
+def test_generate_mode_list_succeeds(indigo, plugin, area_devices):
+    dev = indigo.devices["First Area"]
+    plugin.deviceStartComm(dev)
+
+    values = {}
+    plugin.getActionConfigUiValues(values, "armSecuritySystem", dev.id)
+    tups = plugin.generateModeList(None, values, "armSecuritySystem", dev.id)
+    assert len(tups) == 7
+    assert ("0", "Disarm") in tups
+    assert ("3", "Away Mode") in tups
+
+
+def test_validate_action_config_ui_uses_substitute_check(
+        plugin, area_devices, monkeypatch, indigo):
+    dev = indigo.devices["First Area"]
+    plugin.deviceStartComm(dev)
+    values = {}
+
+    plugin.getActionConfigUiValues(values, "armSecuritySystem", dev.id)
+
+    sub = Mock(return_value=(True, ""))
+    monkeypatch.setattr(indigo.PluginBase, "substitute", sub)
+    values["user"] = "%%blahblah"
+    tup = plugin.validateActionConfigUi(values, "armSecuritySystem", 1)
+
+    assert tup[0]
+    assert not tup[2]
+    assert sub.call_count == 1
+
+
+def test_validate_action_config_ui_catches_obvious_errors(
+        plugin, indigo, omni1, area_devices):
+
+    dev = indigo.devices["First Area"]
+    plugin.deviceStartComm(dev)
+    values = {}
+
+    plugin.getActionConfigUiValues(values, "armSecuritySystem", dev.id)
+    test_values = ["0000", "0", "abc", "999"]
+    for value in test_values:
+        values["user"] = value
+        tup = plugin.validateActionConfigUi(values, "armSecuritySystem", 1)
+        assert not tup[0]
+        assert "user" in tup[2]
+
+
+def test_arm_security_system_sends_command(
+        plugin, indigo, omni1, area_devices, jomnilinkII):
+    dev = indigo.devices["Area 2"]
+
+    omni1.controllerCommand = Mock()
+    jomnilinkII.MessageTypes.CommandMessage.CMD_SECURITY_OMNI_DISARM = 48
+
+    action = Mock()
+    action.deviceId = dev.id
+    action.props = {"user": "1", "mode": 3}
+
+    plugin.armSecuritySystem(action)
+
+    omni1.controllerCommand.assert_called_with(48 + 3, 1, 2)
+
+
+def test_arm_security_system_catches_scripting_errors(
+        plugin, indigo, area_devices):
+    dev = indigo.devices["Area 2"]
+
+    action = Mock()
+    action.deviceId = dev.id
+    action.props = {"user": "99", "mode": 3}
+
+    plugin.armSecuritySystem(action)
+
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+    action.props = {"user": "1", "mode": "abracadabra"}
+
+    plugin.armSecuritySystem(action)
+
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+
+def test_validate_code_action_config_ui_uses_substitute_check(
+        plugin, area_devices, monkeypatch, indigo):
+    values = {}
+    dev = indigo.devices["Area 2"]
+    plugin.getActionConfigUiValues(values, "checkSecurityCode", dev.id)
+
+    sub = Mock(return_value=(True, ""))
+    monkeypatch.setattr(indigo.PluginBase, "substitute", sub)
+    values["code"] = "%%blahblah"
+    tup = plugin.validateActionConfigUi(values, "checkSecurityCode", 1)
+
+    assert tup[0]
+    assert not tup[2]
+    assert sub.call_count == 1
+
+
+def test_validate_code_action_config_ui_catches_obvious_errors(
+        plugin, indigo, area_devices):
+    dev = indigo.devices["Area 2"]
+    values = {}
+    plugin.getActionConfigUiValues(values, "checkSecurityCode", dev.id)
+    test_values = ["123A", "", "0"]
+    for code in test_values:
+        values["code"] = code
+        tup = plugin.validateActionConfigUi(values, "checkSecurityCode", 1)
+        assert not tup[0]
+        assert "code" in tup[2]
+
+
+def test_validate_code_catches_scripting_errors(
+        plugin, indigo, area_devices, version):
+    dev = indigo.devices["Area 2"]
+
+    action = Mock()
+    action.deviceId = dev.id
+    action.props = {"actionVersion": version}
+
+    test_values = ["123A", "", "0"]
+    for code in test_values:
+        action.props["code"] = code
+        plugin.checkSecurityCode(action)
+        assert plugin.errorLog.called
+        plugin.errorLog.reset_mock()
+
+
+def test_check_security_code_updates_device_states_on_valid_code(
+        plugin, indigo, area_devices, omni1, version):
+    dev = indigo.devices["First Area"]
+    plugin.deviceStartComm(dev)
+
+    mock_scv = jomni_mimic.SecurityCodeValidation(16, 2)
+    omni1.reqSecurityCodeValidation = Mock(return_value=mock_scv)
+
+    action = Mock()
+    action.deviceId = dev.id
+    action.props = {"code": "9876", "actionVersion": version}
+
+    plugin.checkSecurityCode(action)
+
+    omni1.reqSecurityCodeValidation.assert_called_with(1, 9, 8, 7, 6)
+    assert dev.states["lastCheckedCode"] == action.props["code"]
+    assert dev.states["lastCheckedCodeAuthority"] == "Manager"
+    assert dev.states["lastCheckedCodeUser"] == 16
+    assert not dev.states["lastCheckedCodeDuress"]
+
+
+def test_check_security_code_handles_network_error(
+        plugin, indigo, area_devices, omni1, py4j, version):
+    dev = indigo.devices["First Area"]
+    plugin.deviceStartComm(dev)
+    omni1.reqSecurityCodeValidation = Mock(
+        side_effect=py4j.protocol.Py4JError)
+
+    action = Mock()
+    action.deviceId = dev.id
+    action.props = {"code": "9876", "actionVersion": version}
+    assert not plugin.errorLog.called
+
+    plugin.checkSecurityCode(action)
+
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+    assert dev.states["lastCheckedCode"] == action.props["code"]
+    assert dev.states["lastCheckedCodeAuthority"] == "Error"
+    assert dev.states["lastCheckedCodeUser"] == "N/A"
+    assert not dev.states["lastCheckedCodeDuress"]
+
+
+def test_concurrent_thread_counts_down_timers(
+        plugin, indigo, jomnilinkII, omni1, area_devices, patched_datetime):
+    dev = indigo.devices["Area 2"]
+    plugin.deviceStartComm(dev)
+
+    status_msg = jomni_mimic.ObjectStatus(
+        jomnilinkII.Message.OBJ_TYPE_AREA,
+        [jomni_mimic.AreaStatus(2, 2, 0, 30, 10)])
+
+    # send notification with nonzero timers
+    omni1._notify("objectStausNotification", status_msg)
+
+    # allow run_concurrent_thread to update them
+    helpers.run_concurrent_thread(plugin, 1)
+
+    assert dev.states["entryTimer"] == 30
+    assert dev.states["exitTimer"] == 10
+
+    patched_datetime.fast_forward(seconds=20)
+    helpers.run_concurrent_thread(plugin, 1)
+
+    assert dev.states["entryTimer"] == 10
+    assert dev.states["exitTimer"] == 0

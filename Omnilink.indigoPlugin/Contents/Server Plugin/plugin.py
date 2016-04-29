@@ -44,9 +44,6 @@ log = logging.getLogger(__name__)
 
 # TODO - Make it possible to change the ports used for Py4J
 # TODO - configure sleep time waiting for java process
-# TODO - what if the dialog is brought up with pre-existing devices but
-#      the encryption key has changed, user fixes it in dialog, we need
-#      to fix it in all devices in group
 
 
 class Plugin(indigo.PluginBase):

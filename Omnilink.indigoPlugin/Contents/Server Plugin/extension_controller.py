@@ -18,7 +18,6 @@
 
 """ Omni Plugin extension for Controller Devices """
 from __future__ import unicode_literals
-from collections import defaultdict
 from datetime import time, datetime
 from distutils.version import StrictVersion
 import logging
@@ -26,12 +25,11 @@ import logging
 import indigo
 from py4j.protocol import Py4JError
 
-from connection import ConnectionError
 import extensions
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.4.0"
+_VERSION = "0.4.1"
 
 # to do -- update the battery reading periodically (like once a day)
 # action - set time in controller automatically
@@ -43,8 +41,7 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
     """Omni plugin extension for Controller devices """
     def __init__(self):
         self.type_ids = {"device": ["omniControllerDevice"],
-                         "action": ["checkSecurityCode",
-                                    "enableConsoleBeeper",
+                         "action": ["enableConsoleBeeper",
                                     "disableConsoleBeeper",
                                     "sendBeepCommand"],
                          "event": ["phoneLineDead", "phoneLineRing",
@@ -56,7 +53,6 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
                                    "energyCostLow", "energyCostMid",
                                    "energyCostHigh", "energyCostCritical"]}
         self.callbacks = {
-            "checkSecurityCode": self.checkSecurityCode,
             "generateConsoleList": self.generateConsoleList,
             "enableConsoleBeeper": self.enableDisableConsoleBeeper,
             "disableConsoleBeeper": self.enableDisableConsoleBeeper,
@@ -87,32 +83,6 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
         props["deviceVersion"] = _VERSION
         props["number"] = 1
         device.replacePluginPropsOnServer(props)
-
-    def update_device_status(self, dev):
-        self.update_last_checked_code(dev)
-        extensions.DeviceMixin.update_device_status(self, dev)
-
-    authority = {0: "Invalid",
-                 1: "Master",
-                 2: "Manager",
-                 3: "User",
-                 "N/A": "N/A",
-                 "Error": "Error"}
-
-    def update_last_checked_code(self, device,
-                                 code="None", area="None",
-                                 authority="N/A", user="N/A"):
-        """ Set device states for the last checked security code.
-        Defaults are for initialization when no code has been
-        checked yet.
-        """
-        device.updateStateOnServer("lastCheckedCodeArea", area)
-        device.updateStateOnServer("lastCheckedCodeAuthority",
-                                   self.authority.get(authority,
-                                                      "Unknown"))
-        device.updateStateOnServer("lastCheckedCodeUser", user)
-        device.updateStateOnServer("lastCheckedCodeDuress", user == 251)
-        device.updateStateOnServer("lastCheckedCode", code)
 
     def update(self):
         # periodically inquire about battery reading
@@ -193,17 +163,14 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
             filter, values, type_id, device_id))
         results = [("0", "All Keypads")]
         device = indigo.devices[device_id]
-        try:
+
+        with extensions.comm_error_logging(log):
             c = self.plugin.make_connection(device.pluginProps["url"])
             M = c.jomnilinkII.Message
             count = c.omni.reqObjectTypeCapacities(
                 M.OBJ_TYPE_CONSOLE).getCapacity()
             results = results + [(str(i), "Keypad {0}".format(i))
                                  for i in range(1, count + 1)]
-        except (Py4JError, ConnectionError):
-            log.error("Failed to get keypad count from Omni controller")
-            log.debug("", exc_info=True)
-
         return results
 
     def validateActionConfigUi(self, values, type_id, action_id):
@@ -216,82 +183,9 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
                 StrictVersion(_VERSION)):
             values["actionVersion"] = _VERSION
 
-        if type_id != "checkSecurityCode":
-            return (not errors, values, errors)
-
-        code = values["code"]
-        if "%%" in code:
-            self.validate_substitution(values, errors, "code")
-        elif not self.is_valid_code(code):
-            errors["code"] = "Security codes must be four digits: 0001 to 9999"
-
-        area = values["area"]
-        if "%%" in area:
-            self.validate_substitution(values, errors, "area")
-        elif not self.is_valid_area(area):
-            errors["area"] = ("Please enter the area number in which to check "
-                              "the security code")
-
         return (not errors, values, errors)
 
-    def validate_substitution(self, values, errors, field):
-        tup = self.plugin.substitute(values[field], validateOnly=True)
-        valid = tup[0]
-        if not valid:
-            errors[field] = tup[1]
-
-    def is_valid_code(self, code):
-        return (len(code) == 4 and
-                code != "0000" and
-                all(['0' <= ch <= '9' for ch in code]))
-
-    def is_valid_area(self, area):
-        try:
-            if int(area) < 1 or int(area) > 255:
-                return False
-        except ValueError:
-            return False
-        return True
-
     # ----- Action Item Callbacks ----- #
-
-    def checkSecurityCode(self, action):
-        """ Callback for Validate Security Code action
-        """
-        dev = indigo.devices[action.deviceId]
-        code = self.plugin.substitute(action.props.get("code", ""))
-        area = self.plugin.substitute(action.props.get("area", ""))
-        log.debug("checkSecurity code called for code {0} in area {1}".format(
-            code, area))
-
-        if not self.is_valid_code(code):
-            log.error("checkSecurityCode asked to validate "
-                      "'{0}' which is not between 0001 and 9999".format(code))
-        elif not self.is_valid_area(area):
-            log.error("checkSecurityCode asked to validate code in area "
-                      "{0} which is not between 1 and 255".format(area))
-        else:
-            try:
-                c = self.plugin.make_connection(dev.pluginProps["url"])
-                scv = c.omni.reqSecurityCodeValidation(
-                    int(area), *[ord(ch) - ord("0") for ch in code])
-
-                self.update_last_checked_code(
-                    dev, code=code, area=area,
-                    authority=scv.getAuthorityLevel(),
-                    user=scv.getCodeNumber())
-                log.debug("code {0} has authority {1} in area {2} "
-                          "user number {3}".format(
-                              code, scv.getAuthorityLevel(), area,
-                              scv.getCodeNumber()))
-                return
-
-            except (Py4JError, ConnectionError):
-                log.error("Error communicating with Omni Controller")
-                log.debug("", exc_info=True)
-
-        self.update_last_checked_code(dev, code=code, area=area,
-                                      authority="Error")
 
     def enableDisableConsoleBeeper(self, action):
         """ Callback for enableConsoleBeeper and disableConsoleBeeper. """
@@ -304,14 +198,12 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
 
         enable = 1 if action.pluginTypeId == "enableConsoleBeeper" else 0
         try:
-            c = self.plugin.make_connection(dev.pluginProps["url"])
-            CM = c.jomnilinkII.MessageTypes.CommandMessage
-            console = int(action.props["consoleNumber"])
-            c.omni.controllerCommand(CM.CMD_CONSOLE_ENABLE_DISABLE_BEEPER,
-                                     enable, console)
-        except (Py4JError, ConnectionError):
-            log.error("Error sending beep enable/disable to Omni Controller")
-            log.debug("", exc_info=True)
+            with extensions.comm_error_logging(log):
+                c = self.plugin.make_connection(dev.pluginProps["url"])
+                CM = c.jomnilinkII.MessageTypes.CommandMessage
+                console = int(action.props["consoleNumber"])
+                c.omni.controllerCommand(CM.CMD_CONSOLE_ENABLE_DISABLE_BEEPER,
+                                         enable, console)
         except ValueError:
             log.error('"{0}" is not a valid console number'.format(
                 action.props["consoleNumber"]))
@@ -327,21 +219,20 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
                   'console {2}'.format(action.props["beepCommand"], dev.name,
                                        action.props["consoleNumber"]))
         try:
-            c = self.plugin.make_connection(dev.pluginProps["url"])
-            CM = c.jomnilinkII.MessageTypes.CommandMessage
-            console = int(action.props["consoleNumber"])
-            beep = action.props["beepCommand"]
-            if beep == "beepOff":
-                beep_code = 0
-            elif beep == "beepOn":
-                beep_code = 1
-            else:  # beep will be beepN with N between 1 and 5
-                beep_code = int(beep[-1]) + 1
+            with extensions.comm_error_logging(log):
+                c = self.plugin.make_connection(dev.pluginProps["url"])
+                CM = c.jomnilinkII.MessageTypes.CommandMessage
+                console = int(action.props["consoleNumber"])
+                beep = action.props["beepCommand"]
+                if beep == "beepOff":
+                    beep_code = 0
+                elif beep == "beepOn":
+                    beep_code = 1
+                else:  # beep will be beepN with N between 1 and 5
+                    beep_code = int(beep[-1]) + 1
 
-            c.omni.controllerCommand(CM.CMD_CONSOLE_BEEP, beep_code, console)
-        except (Py4JError, ConnectionError):
-            log.error("Error sending beep command to Omni Controller")
-            log.debug("", exc_info=True)
+                c.omni.controllerCommand(CM.CMD_CONSOLE_BEEP, beep_code,
+                                         console)
         except ValueError:
             log.error("{0} is not a valid console number or "
                       "{1} is not a valid beep command".format(
@@ -461,6 +352,8 @@ class ControllerInfo(extensions.Info):
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_BUTTON).getCapacity())
         say("Max codes:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_CODE).getCapacity())
+        say("Max consoles:",
+            omni.reqObjectTypeCapacities(M.OBJ_TYPE_CONSOLE).getCapacity())
         say("Max thermostats:",
             omni.reqObjectTypeCapacities(M.OBJ_TYPE_THERMO).getCapacity())
         say("Max messages:",
@@ -499,8 +392,14 @@ class ControllerInfo(extensions.Info):
             width = len(datetime.now().strftime(time_format))
             time = "{{0:<{0}}}".format(width).format("Unknown")
 
-        event, pn1, pn2 = self.events.get(m.getEventType(),
-                                          ("Unknown", "Unused", "Unused"))
+        etype = m.getEventType()
+        if etype in self.events:
+            event, pn1, pn2 = self.events[etype]
+        else:
+            model = "Lumina" if "Lumina" in self.props[1].model else "Omni"
+            event, pn1, pn2 = self.modes[model].get(
+                etype, ("Unknown", "Unused", "Unused"))
+
         pnames = [pn1, pn2]
         pvals = [self.modify_parameter(pn1, m.getParameter1()),
                  self.modify_parameter(pn2, m.getParameter2())]
@@ -519,14 +418,6 @@ class ControllerInfo(extensions.Info):
         5: ("Restore", "User", "Zone"),
         6: ("All Zones Restored", "User", "Area"),
 
-        48 + 0: ("Disarm", "User", "Unused"),
-        48 + 1: ("Arm Home", "User", "Unused"),
-        48 + 2: ("Arm Sleep", "User", "Unused"),
-        48 + 3: ("Arm Away", "User", "Unused"),
-        48 + 4: ("Arm Vacation", "User", "Unused"),
-        48 + 5: ("Arm Party", "User", "Unused"),
-        48 + 6: ("Arm Special", "User", "Unused"),
-
         128: ("Zone Tripped", "Unused", "Zone"),
         129: ("Zone Trouble", "Unused", "Zone"),
         130: ("Remote Phone Access", "User", "Unused"),
@@ -543,6 +434,20 @@ class ControllerInfo(extensions.Info):
         140: ("Access Granted", "User Number", "Reader"),
         141: ("Access Denied", "User Number", "Reader"),
         }
+
+    modes = {"Omni": {48 + 0: ("Disarm", "User", "Unused"),
+                      48 + 1: ("Arm Day", "User", "Unused"),
+                      48 + 2: ("Arm Night", "User", "Unused"),
+                      48 + 3: ("Arm Away", "User", "Unused"),
+                      48 + 4: ("Arm Vacation", "User", "Unused"),
+                      48 + 5: ("Arm Day Instant", "User", "Unused"),
+                      48 + 6: ("Arm Night Delayed", "User", "Unused")},
+             "Lumina": {48 + 1: ("Set Home Mode", "User", "Unused"),
+                        48 + 2: ("Set Sleep Mode", "User", "Unused"),
+                        48 + 3: ("Set Away Mode", "User", "Unused"),
+                        48 + 4: ("Set Vacation Mode", "User", "Unused"),
+                        48 + 5: ("Set Party Mode", "User", "Unused"),
+                        48 + 6: ("Set Special Mode", "User", "Unused")}}
 
     special_user_codes = {
         251: "Duress code",
@@ -585,7 +490,6 @@ class ControllerProps(extensions.Props):
 
     def _decode_system_info(self, info):
         model = self.models.get(info.getModel(), "Unknown")
-        print("got " + model)
         major = info.getMajor()
         minor = info.getMinor()
         revision_number = info.getRevision()

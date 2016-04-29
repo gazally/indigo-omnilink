@@ -59,6 +59,7 @@ class ControlUnitExtension(extensions.DeviceMixin, extensions.PluginExtension):
                     }
 
         method, text = dispatch[action.deviceAction]
+
         try:
             unit_num = dev.pluginProps["number"]
             unit_info = self.info(dev.pluginProps["url"])
@@ -69,10 +70,10 @@ class ControlUnitExtension(extensions.DeviceMixin, extensions.PluginExtension):
             log.debug("", exc_info=True)
 
     def turn_on(self, action, dev, unit_num, unit_info):
-        unit_info.send_command("CMD_UNIT_ON", unit_num, 0)
+        unit_info.send_command("CMD_UNIT_ON", 0, unit_num)
 
     def turn_off(self, action, dev, unit_num, unit_info):
-        unit_info.send_command("CMD_UNIT_OFF", unit_num, 0)
+        unit_info.send_command("CMD_UNIT_OFF", 0, unit_num)
 
     def toggle(self, action, dev, unit_num, unit_info):
         if dev.onState:
@@ -81,16 +82,16 @@ class ControlUnitExtension(extensions.DeviceMixin, extensions.PluginExtension):
             self.turn_on(action, dev, unit_num, unit_info)
 
     def set_brightness(self, action, dev, unit_num, unit_info):
-        unit_info.send_command("CMD_UNIT_PERCENT", unit_num,
-                               action.actionValue)
+        unit_info.send_command("CMD_UNIT_PERCENT", action.actionValue,
+                               unit_num)
 
     def brighten_by(self, action, dev, unit_num, unit_info):
         new_level = min(100, dev.brightness + action.actionValue)
-        unit_info.send_command("CMD_UNIT_PERCENT", unit_num, new_level)
+        unit_info.send_command("CMD_UNIT_PERCENT", new_level, unit_num)
 
     def dim_by(self, action, dev, unit_num, unit_info):
         new_level = max(0, dev.brightness - action.actionValue)
-        unit_info.send_command("CMD_UNIT_PERCENT", unit_num, new_level)
+        unit_info.send_command("CMD_UNIT_PERCENT", new_level, unit_num)
 
     def actionControlGeneral(self, action, dev):
         """ Callback from Indigo Server to implement general device actions.
@@ -170,16 +171,6 @@ class UnitInfo(extensions.Info):
         log.debug("Received status for " + self.props[objnum].name)
 
         return objnum, UnitStatus(self.props[objnum].has_brightness, status)
-
-    def send_command(self, cmd_name, unit_num, parameter):
-        """ Send the Omni controller a command, specified by name,
-        along with the unit number and parameter value.
-        See comments in jomnilinkII.MessageTypes.CommandMessage
-        for details.
-        """
-        cmd = getattr(self.connection.jomnilinkII.MessageTypes.CommandMessage,
-                      cmd_name)
-        self.connection.omni.controllerCommand(cmd, parameter, unit_num)
 
     def report(self, report_name, say):
         items = sorted(self.props.items())

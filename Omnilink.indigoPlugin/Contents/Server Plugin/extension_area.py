@@ -18,27 +18,262 @@
 
 """ Omni Plugin extension for Areas """
 from __future__ import unicode_literals
+from collections import defaultdict
+import datetime
+from distutils.version import StrictVersion
 import logging
 
 import indigo
-from py4j.protocol import Py4JError
 
 import extensions
 from connection import ConnectionError
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.3.0"
+_VERSION = "0.4.0"
 
 
 class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
     """Omni plugin extension for Areas """
     def __init__(self):
-        self.type_ids = {"action": [],
+        self.type_ids = {"action": ["checkSecurityCode",
+                                    "armSecuritySystem",
+                                    "armSecuritySystemAll"],
                          "event": []}
         self.type_ids["device"] = ["omniAreaDevice"]
-        self.callbacks = {}
+        self.callbacks = {"checkSecurityCode": self.checkSecurityCode,
+                          "generateModeList": self.generateModeList,
+                          "armSecuritySystem": self.armSecuritySystem}
+
+        self.last_clock_tick = datetime.datetime.now()
+
+        # key is device id, value is dictionary mapping device state names
+        # to tuples (initial timer value in seconds, timestamp)
+        self.timestamps = defaultdict(dict)
+
         extensions.DeviceMixin.__init__(self, AreaInfo, log)
+
+    # ----- Update device states ----- #
+
+    def update(self):
+        """ Called from the plugin's runConcurrentThread loop.
+        Every half a second, update any countdown timers in the
+        device states, until they reach zero.
+        """
+        if (datetime.datetime.now() - self.last_clock_tick <
+                datetime.timedelta(seconds=0.5)):
+            return
+        self.last_clock_tick = datetime.datetime.now()
+        for device_id_list in self.device_ids.values():
+            for dev_id in device_id_list:
+                dev = indigo.devices[dev_id]
+
+                self.update_timer_state(dev, "entryTimer")
+                self.update_timer_state(dev, "exitTimer")
+
+    def update_timer_state(self, dev, statename):
+        """ Update a timer state for a device. """
+        if not dev.states[statename]:
+            return
+        seconds, last_status = self.timestamps[dev.id][statename]
+        delta = (datetime.datetime.now() - last_status).seconds
+        dev.updateStateOnServer(statename, max(0, seconds - delta))
+
+    # ----- Maintenance of device states ----- #
+
+    def update_device_status(self, dev):
+        """ Update device status, and reset the last checked code states """
+        self.update_last_checked_code(dev)
+        extensions.DeviceMixin.update_device_status(self, dev)
+
+    def update_device_from_status(self, dev, status):
+        """ In addition to updating the device from a status, save the
+        current time so that timer countdowns can be done """
+        newstates = status.device_states()
+        for s in ["entryTimer", "exitTimer"]:
+            if newstates[s]:
+                self.timestamps[dev.id][s] = (newstates[s],
+                                              datetime.datetime.now())
+        extensions.DeviceMixin.update_device_from_status(self, dev, status)
+
+    authority = {0: "Invalid",
+                 1: "Master",
+                 2: "Manager",
+                 3: "User",
+                 "N/A": "N/A",
+                 "Error": "Error"}
+
+    def update_last_checked_code(self, device, code="None",
+                                 authority="N/A", user="N/A"):
+        """ Set device states for the last checked security code.
+        Defaults are for initialization when no code has been
+        checked yet.
+        """
+        device.updateStateOnServer("lastCheckedCodeAuthority",
+                                   self.authority.get(authority,
+                                                      "Unknown"))
+        device.updateStateOnServer("lastCheckedCodeUser", user)
+        device.updateStateOnServer("lastCheckedCodeDuress", user == 251)
+        device.updateStateOnServer("lastCheckedCode", code)
+
+    # ----- Action Config UI ----- #
+
+    def getActionConfigUiValues(self, values, type_id, device_id):
+        """ called by the Indigo UI before the Action configuration dialog
+        is shown to the user.
+        """
+        log.debug("getActionConfigUiValues called for {0}".format(type_id))
+        errors = indigo.Dict()
+
+        if type_id == "armSecuritySystem" or type_id == "armSecuritySystemAll":
+            if not values.get("mode", ""):
+                values["mode"] = "1"
+
+            with extensions.comm_error_logging(log):
+                info = self.info(indigo.devices[device_id].pluginProps["url"])
+                values["user_max"] = info.maximum_user_number
+
+        return (values, errors)
+
+    def generateModeList(self, filter, values, type_id, device_id):
+        """ Generate list of arm/disarm or lighting modes for the
+        arm/disarm action configuration ui.
+        """
+        log.debug("generateModeList called, {0}, {1}, {2}, {3}".format(
+            filter, values, type_id, device_id))
+        device = indigo.devices[device_id]
+        results = {}
+
+        with extensions.comm_error_logging(log):
+            info = self.info(device.pluginProps["url"])
+            modes = AreaStatus.mode_names[info.controller_type].items()
+            for k, v in modes:
+                if k == 0:
+                    results[str(k)] = "Disarm"
+                else:
+                    results[str(k)] = v + " Mode"
+
+        return sorted(results.items())
+
+    def validateActionConfigUi(self, values, type_id, action_id):
+        """ called by the Indigo UI to validate the values dictionary
+        for the Action user interface dialog
+        """
+        log.debug("Action Validation called for %s" % type_id)
+        errors = indigo.Dict()
+        if (StrictVersion(values.get("actionVersion", "0.0")) <
+                StrictVersion(_VERSION)):
+            values["actionVersion"] = _VERSION
+
+        if type_id == "checkSecurityCode":
+            code = values["code"]
+            if "%%" in code:
+                self.validate_substitution(values, errors, "code")
+            elif not self.is_valid_code(code):
+                errors["code"] = ("Security codes must be four digits: "
+                                  "0001 to 9999")
+        else:
+            user = values["user"]
+            if "%%" in user:
+                self.validate_substitution(values, errors, "user")
+            else:
+                try:
+                    self.user_number(values, values["user_max"])
+                except ValueError:
+                    errors["user"] = ("Please enter the user number to arm or "
+                                      "disarm with, not the user code")
+        return (not errors, values, errors)
+
+    def validate_substitution(self, values, errors, field):
+        tup = self.plugin.substitute(values[field], validateOnly=True)
+        valid = tup[0]
+        if not valid:
+            errors[field] = tup[1]
+
+    def user_number(self, values, user_max, do_substitute=False):
+        user = values.get("user", "")
+        if do_substitute:
+            user = self.plugin.substitute(user, validateOnly=False)
+        if len(user) == 4:
+            raise ValueError
+        num = int(user)
+        if num < 1 or num > user_max:
+            raise ValueError
+        return num
+
+    def is_valid_code(self, code):
+        return (len(code) == 4 and
+                code != "0000" and
+                all(['0' <= ch <= '9' for ch in code]))
+
+    # ----- Action callbacks ----- #
+
+    def armSecuritySystem(self, action):
+        """ Callback for the arm/disarm security system action """
+        dev = indigo.devices[action.deviceId]
+        info = self.info(dev.pluginProps["url"])
+        try:
+            user = self.user_number(action.props, info.maximum_user_number,
+                                    True)
+        except ValueError:
+            log.error("armSecuritySystem given invalid user number "
+                      '"{0}"'.format(action.props.get("user", "")))
+            return
+
+        mode = action.props.get("mode", "")
+        try:
+            mode = int(mode)
+            AreaStatus.mode_names[info.controller_type][mode]
+        except (KeyError, ValueError):
+            log.error("armSecuritySystem given invalid mode {0}".format(
+                mode))
+            return
+
+        if dev.deviceTypeId == "omniAreaDevice":
+            area = dev.pluginProps["number"]
+        else:
+            area = 0
+
+        log.debug("armSecuritySystem called with user {0}, area {1}, "
+                  "mode {2}".format(user, area, mode))
+
+        with extensions.comm_error_logging(log):
+            area_info = self.info(dev.pluginProps["url"])
+            area_info.send_mode_command(mode, user, area)
+
+    def checkSecurityCode(self, action):
+        """ Callback for Validate Security Code action
+        """
+        dev = indigo.devices[action.deviceId]
+        if dev.deviceTypeId != "omniAreaDevice":
+            log.error("Old version of Check Security Code action. "
+                      "Please delete and re-create it. ")
+            return
+        code = self.plugin.substitute(action.props.get("code", ""))
+        area = dev.pluginProps["number"]
+
+        log.debug("checkSecurity code called for code {0} in area {1}".format(
+            code, area))
+
+        if not self.is_valid_code(code):
+            log.error("checkSecurityCode asked to validate "
+                      "'{0}' which is not between 0001 and 9999".format(code))
+        else:
+            with extensions.comm_error_logging(log):
+                c = self.plugin.make_connection(dev.pluginProps["url"])
+                scv = c.omni.reqSecurityCodeValidation(
+                    int(area), *[ord(ch) - ord("0") for ch in code])
+
+                self.update_last_checked_code(
+                    dev, code=code, authority=scv.getAuthorityLevel(),
+                    user=scv.getCodeNumber())
+                log.debug("code {0} has authority {1} in area {2} "
+                          "user number {3}".format(
+                              code, scv.getAuthorityLevel(), area,
+                              scv.getCodeNumber()))
+                return
+
+        self.update_last_checked_code(dev, code=code, authority="Error")
 
 
 class AreaInfo(extensions.Info):
@@ -70,6 +305,7 @@ class AreaInfo(extensions.Info):
         """
         self.connection = connection
         self.controller_type = self._get_controller_type()
+        self.maximum_user_number = self._get_maximum_user_number()
         self.props = self.fetch_all_props(connection, AreaProperties, "AREA",
                                           "NAMED_UNAMED", "NONE", "NONE")
         remove = [objnum for objnum, props in self.props.items()
@@ -82,7 +318,16 @@ class AreaInfo(extensions.Info):
                              for num, ap in self.props.items())))
 
     def _get_controller_type(self):
-        return "Omni"
+        modelnum = self.connection.omni.reqSystemInformation().getModel()
+        if modelnum == 36 or modelnum == 37:
+            return "Lumina"
+        else:
+            return "Omni"
+
+    def _get_maximum_user_number(self):
+        M = self.connection.jomnilinkII.Message
+        return self.connection.omni.reqObjectTypeCapacities(
+            M.OBJ_TYPE_CODE).getCapacity()
 
     def fetch_status(self, objnum):
         """Given the number of a area query the Omni controller for the
@@ -90,8 +335,6 @@ class AreaInfo(extensions.Info):
         May raise ConnectionError or Py4JavaError if there is no valid
         connection or a network error.
         """
-        if objnum not in self.props:
-            raise ConnectionError("Area {0} is not defined on Omni system")
         status_msg = self.connection.omni.reqObjectStatus(
             self.connection.jomnilinkII.Message.OBJ_TYPE_AREA, objnum, objnum)
 
@@ -113,15 +356,11 @@ class AreaInfo(extensions.Info):
 
         return objnum, AreaStatus(self.controller_type, status)
 
-    def send_command(self, cmd_name, area_num, parameter):
-        """ Send the Omni controller a command, specified by name,
-        along with the area number and parameter value.
-        See comments in jomnilinkII.MessageTypes.CommandMessage
-        for details.
-        """
-        cmd = getattr(self.connection.jomnilinkII.MessageTypes.CommandMessage,
-                      cmd_name)
-        self.connection.omni.controllerCommand(cmd, area_num, parameter)
+    def send_mode_command(self, mode, user, area):
+        """ Send the Omni controller an arm/disarm command """
+        CM = self.connection.jomnilinkII.MessageTypes.CommandMessage
+        self.connection.omni.controllerCommand(
+            CM.CMD_SECURITY_OMNI_DISARM + mode, user, area)
 
     def report(self, report_name, say):
         items = sorted(self.props.items())

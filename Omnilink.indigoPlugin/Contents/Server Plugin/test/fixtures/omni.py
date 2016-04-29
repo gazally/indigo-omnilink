@@ -194,7 +194,9 @@ def omni_messages(req_object_properties, req_object_status):
             ("reqObjectProperties", "side_effect",
              req_object_properties),
             ("reqObjectStatus", "side_effect",
-             req_object_status))
+             req_object_status),
+            ("reqObjectTypeCapacities", "return_value",
+             jomni_mimic.ObjectTypeCapacities(8)))
 
 
 def omni1_system_messages_asserts(dev):
@@ -239,7 +241,9 @@ def omni_messages_2(req_object_properties, req_object_status):
             ("reqObjectProperties", "side_effect",
              req_object_properties),
             ("reqObjectStatus", "side_effect",
-             req_object_status))
+             req_object_status),
+            ("reqObjectTypeCapacities", "return_value",
+             jomni_mimic.ObjectTypeCapacities(2)))
 
 
 def omni2_system_messages_asserts(dev):

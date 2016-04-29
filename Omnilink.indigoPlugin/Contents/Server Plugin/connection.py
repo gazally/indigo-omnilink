@@ -171,8 +171,9 @@ class Connection(object):
     # ----- Callbacks for notification events ----- #
 
     def status_callback(self, _, status):
-        log.debug("Status update message type {0} from {1}".format(
-            status.getStatusType(), self.url))
+        log.debug("Status update message from {1}: {0}".format(
+            ", ".join([s.toString() for s in status.getStatuses()]),
+            self.url))
 
     def event_callback(self, _, other):
         log.debug("Received otherEventNotification from " + self.url)

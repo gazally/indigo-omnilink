@@ -1,5 +1,3 @@
-<?xml version="1.0"?>
-<Actions>
 <Action id="checkSecurityCode" deviceFilter="self.omniAreaDevice">
   <Name>Validate a Security Code</Name>
   <CallbackMethod>checkSecurityCode</CallbackMethod>
@@ -65,61 +63,3 @@
     <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
   </ConfigUI>
 </Action>
-<Action id="enableConsoleBeeper" deviceFilter = "self.omniControllerDevice">
-  <Name>Enable Keypad Beeper</Name>
-  <CallbackMethod>enableConsoleBeeper</CallbackMethod>
-  <ConfigUI>
-    <Field id="info" type="label">
-      <Label>Choose the keypad which you would like to enable the beeper of, or choose all keypads:</Label>
-    </Field>
-    <Field id="consoleNumber" type="menu">
-      <Label>Keypad:</Label>
-      <List class="self" filter="" method="generateConsoleList"/>
-    </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.3.0" hidden="true"/>
-  </ConfigUI>
-</Action>
-<Action id="disableConsoleBeeper" deviceFilter = "self.omniControllerDevice">
-  <Name>Disable Keypad Beeper</Name>
-  <CallbackMethod>disableConsoleBeeper</CallbackMethod>
-  <ConfigUI>
-    <Field id="info" type="label">
-      <Label>Choose the keypad which you would like to disable the beeper of, or choose all keypads:</Label>
-    </Field>
-    <Field id="consoleNumber" type="menu">
-      <Label>Keypad:</Label>
-      <List class="self" filter="" method="generateConsoleList"/>
-    </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.3.0" hidden="true"/>
-  </ConfigUI>
-</Action>
-<Action id="sendBeepCommand" deviceFilter="self.omniControllerDevice">
-  <Name>Send Beep Command to Keypad</Name>
-  <CallbackMethod>sendBeepCommand</CallbackMethod>
-  <ConfigUI>
-    <Field id="info" type="label">
-      <Label>Choose the keypad to send the beep command to, or all keypads:</Label>
-    </Field>
-    <Field id="consoleNumber" type="menu">
-      <Label>Keypad:</Label>
-      <List class="self" filter="" method="generateConsoleList"/>
-    </Field>
-    <Field id="info2" type="label">
-      <Label>Choose the command to send:</Label>
-    </Field>
-    <Field id="beepCommand" type="menu" defaultValue="beepOff">
-      <Label>Beep Command:</Label>
-      <List>
-	<Option value="beepOff">Turn Beeping Off</Option>
-	<Option value="beepOn">Beep Indefinitely</Option>
-	<Option value="beep1">Beep 1 time</Option>
-	<Option value="beep2">Beep 2 times</Option>
-	<Option value="beep3">Beep 3 times</Option>
-	<Option value="beep4">Beep 4 times</Option>
-	<Option value="beep5">Beep 5 times</Option>
-      </List>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.3.0" hidden="true"/>
-    </Field>
-  </ConfigUI>
-</Action>
-</Actions>

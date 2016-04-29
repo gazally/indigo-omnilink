@@ -71,6 +71,26 @@
       <TriggerLabel>Temperature Alarm:</TriggerLabel>
       <ControlPageLabel>Temperature Alarm:</ControlPageLabel>
     </State>
+    <State id="lastCheckedCode">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Checked Security Code:</TriggerLabel>
+      <ControlPageLabel>Checked Security Code:</ControlPageLabel>
+    </State>
+    <State id="lastCheckedCodeAuthority">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Code Authority:</TriggerLabel>
+      <ControlPageLabel>Code Authority:</ControlPageLabel>
+    </State>
+    <State id="lastCheckedCodeUser">
+      <ValueType>String</ValueType>
+      <TriggerLabel>Code User Number:</TriggerLabel>
+      <ControlPageLabel>Code User Number:</ControlPageLabel>
+    </State>
+    <State id="lastCheckedCodeDuress">
+      <ValueType>Boolean</ValueType>
+      <TriggerLabel>Code is Duress Code:</TriggerLabel>
+      <ControlPageLabel>Code is Duress Code:</ControlPageLabel>
+    </State>
   </States>
-  <UiDisplayStateId>Mode</UiDisplayStateId>
+  <UiDisplayStateId>mode</UiDisplayStateId>
 </Device>
