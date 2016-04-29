@@ -387,7 +387,7 @@ Command Parameter 1 Parameter 2       Description
 	public static int CMD_SECURITY_OMNI_NIGHT_DELAYED_MODE = 54;
 	public static int CMD_SECURITY_BYPASS_ZONE = 4;
 	public static int CMD_SECURITY_RESTORE_ZONE = 5;
-	public static int CMD_SECURITY_RESTORE_ALL_ZONES;
+	public static int CMD_SECURITY_RESTORE_ALL_ZONES = 6;
 	public static int CMD_SECURITY_LUMINA_HOME_MODE = 49;
 	public static int CMD_SECURITY_LUMINA_SLEEP_MODE = 50;
 	public static int CMD_SECURITY_LUMINA_AWAY_MODE = 51;

@@ -189,10 +189,11 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
 
     def enableDisableConsoleBeeper(self, action):
         """ Callback for enableConsoleBeeper and disableConsoleBeeper. """
-        dev = indigo.devices[action.deviceId]
-        if not action.props.get("consoleNumber", False):
+        if (action.deviceId not in indigo.devices or
+                not action.props.get("consoleNumber", False)):
             log.error("{0} not configured".format(action.pluginTypeId))
             return
+        dev = indigo.devices[action.deviceId]
         log.debug('{0} called for device "{1}" console {2}'.format(
             action.pluginTypeId, dev.name, action.props["consoleNumber"]))
 

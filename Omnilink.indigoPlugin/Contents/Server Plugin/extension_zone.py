@@ -23,7 +23,6 @@ from distutils.version import StrictVersion
 import logging
 
 import indigo
-from py4j.protocol import Py4JError
 
 import extensions
 from connection import ConnectionError
@@ -162,8 +161,11 @@ class ZoneInfo(extensions.Info):
         statuses = status_msg.getStatuses()
         status = statuses[0]
         objnum = status.getNumber()
-        log.debug("Received status for " + self.props[objnum].name)
+        if objnum not in self.props:
+            log.debug("Ignoring status for unnamed zone {0}".format(objnum))
+            return None, None
 
+        log.debug("Received status for " + self.props[objnum].name)
         return objnum, ZoneStatus(status)
 
     def report(self, report_name, say):

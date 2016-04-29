@@ -168,9 +168,13 @@ class UnitInfo(extensions.Info):
         statuses = status_msg.getStatuses()
         status = statuses[0]
         objnum = status.getNumber()
-        log.debug("Received status for " + self.props[objnum].name)
+        if objnum not in self.props:
+            log.debug("Ignoring status for unnamed unit {0}".format(objnum))
+            return None, None
 
-        return objnum, UnitStatus(self.props[objnum].has_brightness, status)
+        log.debug("Received status for " + self.props[objnum].name)
+        return objnum, UnitStatus(self.props[objnum].has_brightness,
+                                  status)
 
     def report(self, report_name, say):
         items = sorted(self.props.items())

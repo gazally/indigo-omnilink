@@ -295,6 +295,38 @@ def test_arm_security_system_catches_scripting_errors(
     plugin.errorLog.reset_mock()
 
 
+def test_bypass_restore_sends_command(
+        plugin, indigo, omni1, area_devices, jomnilinkII):
+    dev = indigo.devices["Area 2"]
+
+    omni1.controllerCommand = Mock()
+    jomnilinkII.MessageTypes.CommandMessage.CMD_SECURITY_RESTORE_ALL_ZONES = 4
+
+    action = Mock()
+    action.pluginTypeId = "restoreAllZones"
+    action.deviceId = dev.id
+    action.props = {"user": "1"}
+
+    plugin.bypassRestoreZone(action)
+
+    omni1.controllerCommand.assert_called_with(4, 1, 2)
+
+
+def test_bypass_restore_catches_scripting_errors(
+        plugin, indigo, area_devices):
+    dev = indigo.devices["Area 2"]
+
+    action = Mock()
+    action.pluginTypeId = "restoreAllZones"
+    action.deviceId = dev.id
+    action.props = {"user": "99"}
+
+    plugin.bypassRestoreZone(action)
+
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+
 def test_validate_code_action_config_ui_uses_substitute_check(
         plugin, area_devices, monkeypatch, indigo):
     values = {}

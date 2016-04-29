@@ -24,6 +24,7 @@ from distutils.version import StrictVersion
 import logging
 
 import indigo
+from py4j.protocol import Py4JError
 
 import extensions
 from connection import ConnectionError
@@ -38,12 +39,19 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
     def __init__(self):
         self.type_ids = {"action": ["checkSecurityCode",
                                     "armSecuritySystem",
-                                    "armSecuritySystemAll"],
+                                    "armSecuritySystemAll",
+                                    "bypassZone",
+                                    "restoreZone",
+                                    "restoreAllZones",
+                                    "restoreAllZonesAllAreas"],
                          "event": []}
+
         self.type_ids["device"] = ["omniAreaDevice"]
+
         self.callbacks = {"checkSecurityCode": self.checkSecurityCode,
                           "generateModeList": self.generateModeList,
-                          "armSecuritySystem": self.armSecuritySystem}
+                          "armSecuritySystem": self.armSecuritySystem,
+                          "bypassRestoreZone": self.bypassRestoreZone}
 
         self.last_clock_tick = datetime.datetime.now()
 
@@ -129,6 +137,7 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
             if not values.get("mode", ""):
                 values["mode"] = "1"
 
+        if type_id != "checkSecurityCode":
             with extensions.comm_error_logging(log):
                 info = self.info(indigo.devices[device_id].pluginProps["url"])
                 values["user_max"] = info.maximum_user_number
@@ -210,6 +219,11 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
 
     def armSecuritySystem(self, action):
         """ Callback for the arm/disarm security system action """
+        if (action.deviceId not in indigo.devices or
+                "user" not in action.props):
+            log.error("{0} action not configured".format(action.pluginTypeId))
+            return
+
         dev = indigo.devices[action.deviceId]
         info = self.info(dev.pluginProps["url"])
         try:
@@ -244,11 +258,20 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
     def checkSecurityCode(self, action):
         """ Callback for Validate Security Code action
         """
+        if (action.deviceId not in indigo.devices or
+                "code" not in action.props):
+            log.error("{0} action not configured".format(action.pluginTypeId))
+            return
+
         dev = indigo.devices[action.deviceId]
         if dev.deviceTypeId != "omniAreaDevice":
             log.error("Old version of Check Security Code action. "
                       "Please delete and re-create it. ")
             return
+        if "code" not in action.props:
+            log.error("armSecuritySystem action not configured")
+            return
+
         code = self.plugin.substitute(action.props.get("code", ""))
         area = dev.pluginProps["number"]
 
@@ -274,6 +297,49 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
                 return
 
         self.update_last_checked_code(dev, code=code, authority="Error")
+
+    def bypassRestoreZone(self, action):
+        """ Callback for the bypassing and restoring zones action """
+        if (action.deviceId not in indigo.devices or
+                "user" not in action.props):
+            log.error("{0} action not configured".format(action.pluginTypeId))
+            return
+
+        dev = indigo.devices[action.deviceId]
+        number = dev.pluginProps["number"]
+
+        try:
+            info = self.info(dev.pluginProps["url"])
+            user = self.user_number(action.props, info.maximum_user_number,
+                                    True)
+        except ValueError:
+            log.error("Bypass/Restore zone action given invalid user "
+                      'number "{0}"'.format(action.props.get("user", "")))
+            return
+        except (Py4JError, ConnectionError):
+            log.error("Error communicating with Omni controller")
+            log.debug("", exc_info=True)
+            return
+
+        if action.pluginTypeId == "bypassZone":
+            cmd_name = "CMD_SECURITY_BYPASS_ZONE"
+        else:
+            if dev.deviceTypeId == "omniZoneDevice":
+                cmd_name = "CMD_SECURITY_RESTORE_ZONE"
+            else:
+                cmd_name = "CMD_SECURITY_RESTORE_ALL_ZONES"
+                if dev.deviceTypeId == "omniControllerDevice":
+                    number = 0  # All zones in all areas
+
+        log.debug("{0} called, user code {1}, area/zone number {2}".format(
+            action.pluginTypeId, user, number))
+
+        try:
+            info.send_command(cmd_name, user, number)
+        except (Py4JError, ConnectionError):
+            log.error("Bypass/Restore command failed")
+            log.debug("", exc_info=True)
+            return
 
 
 class AreaInfo(extensions.Info):
@@ -352,6 +418,10 @@ class AreaInfo(extensions.Info):
 
         status = status_msg.getStatuses()[0]
         objnum = status.getNumber()
+        if objnum not in self.props:
+            log.debug("Ignoring status for disabled area {0}".format(objnum))
+            return None, None
+
         log.debug("Received status for " + self.props[objnum].name)
 
         return objnum, AreaStatus(self.controller_type, status)

@@ -63,3 +63,71 @@
     <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
   </ConfigUI>
 </Action>
+<Action id="bypassZone" deviceFilter="self.omniZoneDevice">
+  <Name>Bypass a Zone</Name>
+  <CallbackMethod>bypassRestoreZone</CallbackMethod>
+  <ConfigUI>
+    <Field id="info" type="label">
+      <Label>Enter the user number from Set Up Codes. Do not enter the 4 digit user code:</Label>
+    </Field>
+    <Field id="user" type="textfield">
+      <Label>User Number:</Label>
+    </Field>
+    <Field id = "sep" type = "separator"/>
+    <Field id = "explanation" type="label">
+      <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
+    </Field>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+  </ConfigUI>
+</Action>
+<Action id="restoreZone" deviceFilter="self.omniZoneDevice">
+  <Name>Restore a Zone</Name>
+  <CallbackMethod>bypassRestoreZone</CallbackMethod>
+  <ConfigUI>
+    <Field id="info" type="label">
+      <Label>Enter the user number from Set Up Codes. Do not enter the 4 digit user code:</Label>
+    </Field>
+    <Field id="user" type="textfield">
+      <Label>User Number:</Label>
+    </Field>
+    <Field id = "sep" type = "separator"/>
+    <Field id = "explanation" type="label">
+      <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
+    </Field>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+  </ConfigUI>
+</Action>
+<Action id="restoreAllZones" deviceFilter="self.omniAreaDevice">
+  <Name>Restore All Zones</Name>
+  <CallbackMethod>bypassRestoreZone</CallbackMethod>
+  <ConfigUI>
+    <Field id="info" type="label">
+      <Label>Enter the user number from Set Up Codes. Do not enter the 4 digit user code:</Label>
+    </Field>
+    <Field id="user" type="textfield">
+      <Label>User Number:</Label>
+    </Field>
+    <Field id = "sep" type = "separator"/>
+    <Field id = "explanation" type="label">
+      <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
+    </Field>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+  </ConfigUI>
+</Action>
+<Action id="restoreAllZonesAllAreas" deviceFilter="self.omniControllerDevice">
+  <Name>Restore All Zones In All Areas</Name>
+  <CallbackMethod>bypassRestoreZone</CallbackMethod>
+  <ConfigUI>
+    <Field id="info" type="label">
+      <Label>Enter the user number from Set Up Codes. Do not enter the 4 digit user code:</Label>
+    </Field>
+    <Field id="user" type="textfield">
+      <Label>User Number:</Label>
+    </Field>
+    <Field id = "sep" type = "separator"/>
+    <Field id = "explanation" type="label">
+      <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
+    </Field>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+  </ConfigUI>
+</Action>
