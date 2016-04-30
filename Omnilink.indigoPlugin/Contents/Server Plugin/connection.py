@@ -86,7 +86,7 @@ class Connection(object):
 
         """
         self.ip, self.port, self.encoding = ip, port, encoding
-        self.url = "{0}:{1}".format(ip, port)
+        self.address = "{0}:{1}".format(ip, port)
 
         self.notification_queue = queue.Queue(maxsize=0)
 
@@ -105,7 +105,7 @@ class Connection(object):
             return
 
         log.debug("Initiating connection with Omni system at {0}".format(
-            self.url))
+            self.address))
         try:
             self._omni = self._get_omni_link()
         except Py4JError as e:
@@ -128,7 +128,7 @@ class Connection(object):
                     self._timestamp + _TIME_BETWEEN_RETRIES):
                 self._timestamp = datetime.datetime.now()
                 log.debug("Attempting to reconnect to Omni system "
-                          "at {0}".format(self.url))
+                          "at {0}".format(self.address))
                 try:
                     omni = self._get_omni_link()
                     self.notification_queue.put(
@@ -165,7 +165,7 @@ class Connection(object):
         omni.addDisconnectListener(DisconnectListener(self.notification_queue))
         omni.enableNotifications()
 
-        log.debug("Successful connection to Omni system at " + self.url)
+        log.debug("Successful connection to Omni system at " + self.address)
         return omni
 
     # ----- Callbacks for notification events ----- #
@@ -173,17 +173,17 @@ class Connection(object):
     def status_callback(self, _, status):
         log.debug("Status update message from {1}: {0}".format(
             ", ".join([s.toString() for s in status.getStatuses()]),
-            self.url))
+            self.address))
 
     def event_callback(self, _, other):
-        log.debug("Received otherEventNotification from " + self.url)
+        log.debug("Received otherEventNotification from " + self.address)
 
     def reconnect_callback(self, _, omni):
         log.debug("Sending reconnect notifications")
         self._omni = omni
 
     def disconnect_callback(self, _, e):
-        log.error("Lost communication with {0}: {1}".format(self.url,
+        log.error("Lost communication with {0}: {1}".format(self.address,
                   e.getMessage()))
         self._omni = None
         self._setup_retry()

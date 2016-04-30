@@ -63,7 +63,7 @@ class ControlUnitExtension(extensions.DeviceMixin, extensions.PluginExtension):
 
         try:
             unit_num = dev.pluginProps["number"]
-            unit_info = self.info(dev.pluginProps["url"])
+            unit_info = self.info(dev.pluginProps["address"])
             method(action, dev, unit_num, unit_info)
             indigo.server.log('sent "{0}" {1} request'.format(dev.name, text))
         except (Py4JError, ConnectionError):

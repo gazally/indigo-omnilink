@@ -17,7 +17,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import print_function
 from __future__ import unicode_literals
-from datetime import datetime
 from time import sleep
 
 from mock import Mock
@@ -33,10 +32,11 @@ def create_area_devices(plugin, indigo, values, device_connection_props):
     plugin.createDevices(
         values,
         [dev.id for dev in indigo.devices.iter()
-         if dev.pluginProps["url"] == device_connection_props["url"]])
+         if dev.pluginProps["address"] == device_connection_props["address"]])
     return [dev for dev in indigo.devices.iter()
             if (dev.deviceTypeId == "omniAreaDevice" and
-                dev.pluginProps["url"] == device_connection_props["url"])]
+                dev.pluginProps["address"] ==
+                device_connection_props["address"])]
 
 
 @pytest.fixture

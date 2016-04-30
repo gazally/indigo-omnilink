@@ -196,7 +196,7 @@ def test_validate_device_factory_uivalues_updates_device_fields(
     assert "isConnected" not in values or not values["isConnected"]
     plugin.errorLog.reset_mock()
 
-    assert dev.pluginProps["url"] != device_connection_props_2["url"]
+    assert dev.pluginProps["address"] != device_connection_props_2["address"]
 
     changes = dict(device_factory_defaults)
     changes.update(values)
@@ -204,7 +204,7 @@ def test_validate_device_factory_uivalues_updates_device_fields(
 
     plugin.validateDeviceFactoryUi(changes, [dev.id])
 
-    assert dev.pluginProps["url"] == device_connection_props_2["url"]
+    assert dev.pluginProps["address"] == device_connection_props_2["address"]
 
 
 def test_get_device_factory_uivalues_handles_enckeys_missing(

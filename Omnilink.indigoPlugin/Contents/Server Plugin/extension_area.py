@@ -143,7 +143,8 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
 
         if type_id != "checkSecurityCode":
             with extensions.comm_error_logging(log):
-                info = self.info(indigo.devices[device_id].pluginProps["url"])
+                info = self.info(
+                    indigo.devices[device_id].pluginProps["address"])
                 values["user_max"] = info.maximum_user_number
 
         return (values, errors)
@@ -158,7 +159,7 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
         results = {}
 
         with extensions.comm_error_logging(log):
-            info = self.info(device.pluginProps["url"])
+            info = self.info(device.pluginProps["address"])
             modes = AreaStatus.mode_names[info.controller_type].items()
             for k, v in modes:
                 if k == 0:
@@ -229,7 +230,7 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
             return
 
         dev = indigo.devices[action.deviceId]
-        info = self.info(dev.pluginProps["url"])
+        info = self.info(dev.pluginProps["address"])
         try:
             user = self.user_number(action.props, info.maximum_user_number,
                                     True)
@@ -256,7 +257,7 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
                   "mode {2}".format(user, area, mode))
 
         with extensions.comm_error_logging(log):
-            area_info = self.info(dev.pluginProps["url"])
+            area_info = self.info(dev.pluginProps["address"])
             area_info.send_mode_command(mode, user, area)
 
     def checkSecurityCode(self, action):
@@ -284,7 +285,7 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
                       "'{0}' which is not between 0001 and 9999".format(code))
         else:
             with extensions.comm_error_logging(log):
-                c = self.plugin.make_connection(dev.pluginProps["url"])
+                c = self.plugin.make_connection(dev.pluginProps["address"])
                 scv = c.omni.reqSecurityCodeValidation(
                     int(area), *[ord(ch) - ord("0") for ch in code])
 
@@ -310,7 +311,7 @@ class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):
         number = dev.pluginProps["number"]
 
         try:
-            info = self.info(dev.pluginProps["url"])
+            info = self.info(dev.pluginProps["address"])
             user = self.user_number(action.props, info.maximum_user_number,
                                     True)
         except ValueError:

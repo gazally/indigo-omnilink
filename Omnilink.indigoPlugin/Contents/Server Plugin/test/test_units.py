@@ -34,14 +34,16 @@ def create_unit_devices(plugin, indigo, values, unit_types,
     values["prefix"] = "test"
     plugin.createDevices(
         values, [dev.id for dev in indigo.devices.iter()
-                 if dev.pluginProps["url"] == device_connection_props["url"]])
+                 if dev.pluginProps["address"] ==
+                 device_connection_props["address"]])
     return values
 
 
 def get_unit_devices(indigo, values, unit_types, device_connection_props):
     return [dev for dev in indigo.devices.iter()
             if (dev.deviceTypeId in unit_types and
-                dev.pluginProps["url"] == device_connection_props["url"])]
+                dev.pluginProps["address"] ==
+                device_connection_props["address"])]
 
 
 @pytest.fixture

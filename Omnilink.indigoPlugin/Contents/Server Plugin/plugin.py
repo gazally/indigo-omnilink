@@ -83,6 +83,18 @@ class Plugin(indigo.PluginBase):
         log.debug("Startup called")
         stdout, stderr = Connection.startup(timeout=5)
         self.start_omni_logging(stdout, stderr)
+        self.update_old_devices()
+
+    def update_old_devices(self):
+        """ As of version 0.5.0, keep the hostname:port in the place it should
+        have been from the beginning. Update old devices here.
+        """
+        for dev in indigo.devices.iter("self"):
+            if "url" in dev.pluginProps:
+                props = dev.pluginProps
+                props["address"] = props["url"]
+                del props["url"]
+                dev.replacePluginPropsOnServer(props)
 
     def shutdown(self):
         log.debug("Shutdown called")
@@ -161,7 +173,7 @@ class Plugin(indigo.PluginBase):
 
     # ----- Management of Connection objects ----- #
 
-    def make_connection(self, url, encKey1="", encKey2=""):
+    def make_connection(self, address, encKey1="", encKey2=""):
 
         """ Create a Connection object, and cache it in self.connections
         which is a dictionary of Connection objects indexed by ip:port
@@ -173,7 +185,7 @@ class Plugin(indigo.PluginBase):
 
         This will always return a Connection object, no exceptions.
         """
-        ip, port = self.split_url(url)
+        ip, port = self.split_address(address)
 
         if not encKey1:
             encKey1, encKey2 = self.keychain.get_keys(ip, port)
@@ -182,12 +194,12 @@ class Plugin(indigo.PluginBase):
         else:
             encoding = ""
 
-        if (url in self.connections and
-                self.connections[url].encoding == encoding):
-            return self.connections[url]
+        if (address in self.connections and
+                self.connections[address].encoding == encoding):
+            return self.connections[address]
 
         c = Connection(ip, port, encoding, self.notifications)
-        self.connections[url] = c
+        self.connections[address] = c
         return c
 
     def did_connection_succeed(self, params):
@@ -195,21 +207,21 @@ class Plugin(indigo.PluginBase):
         worked. Don't count on it to tell you if the next thing you're going
         to do is going to work.
         """
-        url = self.make_url(params)
-        return (url in self.connections and
-                self.connections[url].is_connected())
+        address = self.make_address(params)
+        return (address in self.connections and
+                self.connections[address].is_connected())
 
     @staticmethod
-    def make_url(params):
-        """ From device values dictionary, create a url """
+    def make_address(params):
+        """ From device values dictionary, create a web address """
         ip = params["ipAddress"]
         port = params["portNumber"]
         return "{0}:{1}".format(ip, port)
 
     @staticmethod
-    def split_url(url):
-        port = url.split(":")[-1]
-        ip = url[:-(len(port) + 1)]
+    def split_address(address):
+        port = address.split(":")[-1]
+        ip = address[:-(len(port) + 1)]
         return ip, int(port)
 
     # ----- Logging Configuration ----- #
@@ -332,7 +344,7 @@ class Plugin(indigo.PluginBase):
         values = indigo.Dict()
         if dev_ids:
             props = indigo.devices[dev_ids[0]].pluginProps
-            ip, port = self.split_url(props["url"])
+            ip, port = self.split_address(props["address"])
             values["ipAddress"] = ip
             values["portNumber"] = str(port)
             values["prefix"] = props["prefix"]
@@ -349,7 +361,7 @@ class Plugin(indigo.PluginBase):
 
         errors = self.checkConnectionParameters(values)
         if not errors:
-            self.make_connection(self.make_url(values),
+            self.make_connection(self.make_address(values),
                                  values["encryptionKey1"],
                                  values["encryptionKey2"])
             if self.did_connection_succeed(values):
@@ -376,7 +388,7 @@ class Plugin(indigo.PluginBase):
 
         errors = self.checkConnectionParameters(values)
         if not errors and not values["isConnected"]:
-            self.make_connection(self.make_url(values),
+            self.make_connection(self.make_address(values),
                                  values["encryptionKey1"],
                                  values["encryptionKey2"])
             if self.did_connection_succeed(values):
@@ -388,7 +400,7 @@ class Plugin(indigo.PluginBase):
                     # in case anything changed, make sure all
                     # devices match
                     dev = indigo.devices[dev_id]
-                    dev.pluginProps["url"] = self.make_url(values)
+                    dev.pluginProps["address"] = self.make_address(values)
                     dev.pluginProps["prefix"] = values["prefix"]
                     dev.replacePluginPropsOnServer(dev.pluginProps)
             else:
@@ -462,9 +474,9 @@ class Plugin(indigo.PluginBase):
         results = []
         if ("isConnected" in values and values["isConnected"] and
                 self.did_connection_succeed(values)):
-            url = self.make_url(values)
+            address = self.make_address(values)
             for ext in self.extensions:
-                results.extend(ext.getDeviceList(url, dev_ids))
+                results.extend(ext.getDeviceList(address, dev_ids))
 
         return sorted(results, key=lambda tup: tup[1])
 
@@ -476,7 +488,7 @@ class Plugin(indigo.PluginBase):
         """
         for dev_type in values["deviceGroupList"]:
             ext = self.type_ids_map["device"][dev_type]
-            props = {"url": self.make_url(values),
+            props = {"address": self.make_address(values),
                      "prefix": values["prefix"]}
             ext.createDevices(dev_type, props, values["prefix"], dev_ids)
         return values

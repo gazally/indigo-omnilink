@@ -178,13 +178,13 @@ class PluginExtension(object):
     callbacks = None
     reports = None
 
-    def getDeviceList(self, url, dev_ids):
+    def getDeviceList(self, address, dev_ids):
         """ this is called when the plugin needs to know what functionality
-        is available on the particular Omni system specified by the url.
+        is available on the particular Omni system specified by the address.
         Return a list of tuples, (device type, display string).
         Should catch its own exceptions.
         arguments:
-            url -- network address of controller
+            address -- network address of controller
             dev_ids -- list of device_ids in the device factory group
         """
         return []
@@ -222,7 +222,7 @@ class DeviceMixin(object):
     createDevices -- create devices of a given type for the device factory UI
     deviceStartComm -- as in Indigo API. Maintains lists of started devices.
     deviceStopComm -- ditto
-    devices_from_url -- iterator for started devices at a given url
+    devices_from_address -- iterator for started devices at a given address
     triggerStartProcessing -- as in Indigo API. Maintains lists of started
         triggers.
     triggerStopProcessing -- ditto
@@ -266,24 +266,26 @@ class DeviceMixin(object):
         for report_name in info_class.reports:
             self.reports[report_name] = self.say_info
 
-    def info(self, url):
-        """ Handles caching Info objects by url. Makes a new one if we don't
-        have it yet for that url or if the underlying connection object
-        has changed. """
-        connection = self.plugin.make_connection(url)
-        if (url not in self._info or
-                self._info[url].connection is not connection):
-            self._info[url] = self.Info(connection)
-        return self._info[url]
+    def info(self, address):
+        """Handles caching Info objects by address. Makes a new one if we
+        don't have it yet for that address or if the underlying
+        connection object has changed.
+        """
+        connection = self.plugin.make_connection(address)
+        if (address not in self._info or
+                self._info[address].connection is not connection):
+            self._info[address] = self.Info(connection)
+        return self._info[address]
 
     # ----- Create Devices ----- #
 
-    def getDeviceList(self, url, dev_ids):
-        """ Get our Info object for this url and see what device types it has.
+    def getDeviceList(self, address, dev_ids):
+        """ Get our Info object for this address and see what device types it
+        has.
         """
         result = []
         try:
-            props = self.info(url).props
+            props = self.info(address).props
             result = list(set(((p.device_type, p.type_name) for p in
                                props.values())))
         except (Py4JError, ConnectionError):
@@ -300,7 +302,7 @@ class DeviceMixin(object):
                     if indigo.devices[id].deviceTypeId == dev_type]
         values["deviceVersion"] = _VERSION
         try:
-            for props in self.info(values["url"]).props.values():
+            for props in self.info(values["address"]).props.values():
                 if props.device_type == dev_type:
                     if not any((dev.pluginProps["number"] == props.number
                                 for dev in old_devs)):
@@ -377,7 +379,7 @@ class DeviceMixin(object):
     def update_device_status(self, dev):
         num = dev.pluginProps["number"]
         try:
-            info = self.info(dev.pluginProps["url"])
+            info = self.info(dev.pluginProps["address"])
             props = info.props[num]
             status = info.fetch_status(num)
         except (ConnectionError, Py4JError):
@@ -395,13 +397,13 @@ class DeviceMixin(object):
         for state, value in status.device_states().items():
             dev.updateStateOnServer(state, value)
 
-    def devices_from_url(self, url):
-        """ Produce an iteration of device objects matching the given url
+    def devices_from_address(self, address):
+        """ Produce an iteration of device objects matching the given address
         by selecting from self.device_ids """
         for dev_ids_of_type in self.device_ids.values():
             for dev_id in dev_ids_of_type:
                 dev = indigo.devices[dev_id]
-                if (url == dev.pluginProps["url"]):
+                if (address == dev.pluginProps["address"]):
                     yield dev
 
     # ----- Trigger Start and Stop Methods ----- #
@@ -435,7 +437,7 @@ class DeviceMixin(object):
 
     def status_notification(self, connection, status_msg):
         try:
-            info = self.info(connection.url)
+            info = self.info(connection.address)
             number, status = info.number_and_status_from_notification(
                 status_msg)
         except (Py4JError, ConnectionError):
@@ -444,7 +446,7 @@ class DeviceMixin(object):
             return
 
         if status is not None:
-            for dev in self.devices_from_url(connection.url):
+            for dev in self.devices_from_address(connection.address):
                 if dev.pluginProps["number"] == number:
                     self.update_device_from_status(dev, status)
 
@@ -452,20 +454,20 @@ class DeviceMixin(object):
         """ Callback used by plugin when successful reconnection
         is made to the Omni controller. Refresh device states.
         """
-        for dev in self.devices_from_url(connection.url):
+        for dev in self.devices_from_address(connection.address):
             self.update_device_status(dev)
 
     def disconnect_notification(self, connection, e):
         """ Callback used by plugin when a disconnect message is
         received from the jomnilinkII library. Put all devices into
         the error state. """
-        for dev in self.devices_from_url(connection.url):
+        for dev in self.devices_from_address(connection.address):
             dev.setErrorStateOnServer("not connected")
 
     # ----- Write info to log ----- #
 
     def say_info(self, report_name, connection, say):
-        self.info(connection.url).report(report_name, say)
+        self.info(connection.address).report(report_name, say)
 
 
 class Info(object):

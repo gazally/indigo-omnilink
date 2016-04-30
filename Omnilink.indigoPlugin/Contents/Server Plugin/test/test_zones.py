@@ -32,10 +32,11 @@ def create_zone_devices(plugin, indigo, values, device_connection_props):
     plugin.createDevices(
         values,
         [dev.id for dev in indigo.devices.iter()
-         if dev.pluginProps["url"] == device_connection_props["url"]])
+         if dev.pluginProps["address"] == device_connection_props["address"]])
     return [dev for dev in indigo.devices.iter()
             if (dev.deviceTypeId == "omniZoneDevice" and
-                dev.pluginProps["url"] == device_connection_props["url"])]
+                dev.pluginProps["address"] ==
+                device_connection_props["address"])]
 
 
 @pytest.fixture

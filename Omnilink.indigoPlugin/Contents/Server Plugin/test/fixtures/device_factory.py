@@ -55,7 +55,7 @@ def device_factory_valid_input(enckey1, enckey2):
 def device_connection_props():
     """ Return connection parameters corresponding to
     device_factory_valid_input """
-    return {"url": "192.168.1.42:4444",
+    return {"address": "192.168.1.42:4444",
             "prefix": ""}
 
 
@@ -96,7 +96,7 @@ def device_connection_props_2():
     """ Return connection parameters corresponding to
     device_factory_valid_input_2.
     """
-    return {"url": "10.0.0.2:4444",
+    return {"address": "10.0.0.2:4444",
             "prefix": ""}
 
 

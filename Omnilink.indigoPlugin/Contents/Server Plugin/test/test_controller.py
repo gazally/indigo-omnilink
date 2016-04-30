@@ -36,11 +36,11 @@ def controller_device(indigo, plugin, device_factory_fields,
     plugin.createDevices(
         values,
         [dev.id for dev in indigo.devices.iter()
-         if dev.pluginProps["url"] == device_connection_props["url"]])
+         if dev.pluginProps["address"] == device_connection_props["address"]])
 
     dev = [dev for dev in indigo.devices.iter()
            if (dev.deviceTypeId == "omniControllerDevice" and
-               dev.pluginProps["url"] == device_connection_props["url"])]
+               dev.pluginProps["address"] == device_connection_props["address"])]
     assert len(dev) == 1
     return dev[0]
 
@@ -61,11 +61,13 @@ def second_controller_device(indigo, plugin,
     plugin.createDevices(
         values,
         [dev.id for dev in indigo.devices.iter()
-         if dev.pluginProps["url"] == device_connection_props_2["url"]])
+         if dev.pluginProps["address"] ==
+         device_connection_props_2["address"]])
 
     dev = [dev for dev in indigo.devices.iter()
            if (dev.deviceTypeId == "omniControllerDevice" and
-               dev.pluginProps["url"] == device_connection_props_2["url"])]
+               dev.pluginProps["address"] ==
+               device_connection_props_2["address"])]
     assert len(dev) == 1
     return dev[0]
 

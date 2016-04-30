@@ -100,7 +100,7 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
             return
 
         status = status_msg.getStatuses()[0]
-        info = self.info(connection.url)
+        info = self.info(connection.address)
         existing_alarms = info.get_alarm_set()
         info.update_alarm(status)
 
@@ -110,9 +110,9 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
 
     def run_triggers_on_new_alarms(self, connection, alarms):
         log.debug("Controller at {0} has alarm: {1}".format(
-            connection.url, ", ".join(list(alarms))))
+            connection.address, ", ".join(list(alarms))))
 
-        for dev in self.devices_from_url(connection.url):
+        for dev in self.devices_from_address(connection.address):
             triggers = self.triggers[dev.id]
             for t in triggers["alarm"]:
                 trig_alarms = set(indigo.triggers[t].pluginProps["alarmTypes"])
@@ -147,7 +147,7 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
         that are pertinent to the controller functionality, and set
         off any active triggers.
         """
-        for dev in self.devices_from_url(connection.url):
+        for dev in self.devices_from_address(connection.address):
             triggers = self.triggers[dev.id]
             log.debug('Received "other event" notification for device '
                       "{0}".format(dev.id))
@@ -194,7 +194,7 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
         device = indigo.devices[device_id]
 
         with extensions.comm_error_logging(log):
-            c = self.plugin.make_connection(device.pluginProps["url"])
+            c = self.plugin.make_connection(device.pluginProps["address"])
             M = c.jomnilinkII.Message
             count = c.omni.reqObjectTypeCapacities(
                 M.OBJ_TYPE_CONSOLE).getCapacity()
@@ -229,7 +229,7 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
         enable = 1 if action.pluginTypeId == "enableConsoleBeeper" else 0
         try:
             with extensions.comm_error_logging(log):
-                c = self.plugin.make_connection(dev.pluginProps["url"])
+                c = self.plugin.make_connection(dev.pluginProps["address"])
                 CM = c.jomnilinkII.MessageTypes.CommandMessage
                 console = int(action.props["consoleNumber"])
                 c.omni.controllerCommand(CM.CMD_CONSOLE_ENABLE_DISABLE_BEEPER,
@@ -250,7 +250,7 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
                                        action.props["consoleNumber"]))
         try:
             with extensions.comm_error_logging(log):
-                c = self.plugin.make_connection(dev.pluginProps["url"])
+                c = self.plugin.make_connection(dev.pluginProps["address"])
                 CM = c.jomnilinkII.MessageTypes.CommandMessage
                 console = int(action.props["consoleNumber"])
                 beep = action.props["beepCommand"]
@@ -286,7 +286,7 @@ class ControllerExtension(extensions.DeviceMixin, extensions.PluginExtension):
         if dev_id:
             device = indigo.devices[dev_id]
             with extensions.comm_error_logging(log):
-                info = self.info(device.pluginProps["url"])
+                info = self.info(device.pluginProps["address"])
                 results = zip(AreaStatus.alarm_names, AreaStatus.alarm_names)
                 if info.props[1].base_model == "Lumina":
                     # Lumina only has freeze, water, temp
