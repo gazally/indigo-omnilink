@@ -32,7 +32,7 @@ from properties import AreaProperties, AreaStatus, ControllerProps
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.4.0"
+_VERSION = "0.5.0"
 
 
 class AreaExtension(extensions.DeviceMixin, extensions.PluginExtension):

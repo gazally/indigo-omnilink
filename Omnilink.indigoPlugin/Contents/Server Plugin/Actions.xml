@@ -14,7 +14,7 @@
     <Field id = "explanation" type="label">
       <Label>Variable and device substitution markup (%%v:VARIABLEID%% and  %%d:DEVICEID:STATEKEY%%) work in the above field.</Label>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="armSecuritySystem" deviceFilter="self.omniAreaDevice">
@@ -38,7 +38,7 @@
     <Field id = "explanation" type="label">
       <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="armSecuritySystemAll" deviceFilter="self.omniControllerDevice">
@@ -62,7 +62,7 @@
     <Field id = "explanation" type="label">
       <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="bypassZone" deviceFilter="self.omniZoneDevice">
@@ -79,7 +79,7 @@
     <Field id = "explanation" type="label">
       <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="restoreZone" deviceFilter="self.omniZoneDevice">
@@ -96,7 +96,7 @@
     <Field id = "explanation" type="label">
       <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="restoreAllZones" deviceFilter="self.omniAreaDevice">
@@ -113,7 +113,7 @@
     <Field id = "explanation" type="label">
       <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="restoreAllZonesAllAreas" deviceFilter="self.omniControllerDevice">
@@ -130,7 +130,7 @@
     <Field id = "explanation" type="label">
       <Label>Variable and device substitution markup (%%v:VARIABLEID%% and %%d:DEVICEID:STATEKEY%%) work in the user number field.</Label>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.4.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="enableConsoleBeeper" deviceFilter = "self.omniControllerDevice">
@@ -144,7 +144,7 @@
       <Label>Keypad:</Label>
       <List class="self" filter="" method="generateConsoleList"/>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.3.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="disableConsoleBeeper" deviceFilter = "self.omniControllerDevice">
@@ -158,7 +158,7 @@
       <Label>Keypad:</Label>
       <List class="self" filter="" method="generateConsoleList"/>
     </Field>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.3.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
   </ConfigUI>
 </Action>
 <Action id="sendBeepCommand" deviceFilter="self.omniControllerDevice">
@@ -186,7 +186,7 @@
 	<Option value="beep4">Beep 4 times</Option>
 	<Option value="beep5">Beep 5 times</Option>
       </List>
-    <Field id = "actionVersion" type="textfield" defaultValue="0.3.0" hidden="true"/>
+    <Field id = "actionVersion" type="textfield" defaultValue="0.5.0" hidden="true"/>
     </Field>
   </ConfigUI>
 </Action>

@@ -24,7 +24,7 @@ from py4j.protocol import Py4JError
 
 from connection import ConnectionError
 
-_VERSION = "0.4.0"
+_VERSION = "0.5.0"
 
 
 class OldVersionError(Exception):

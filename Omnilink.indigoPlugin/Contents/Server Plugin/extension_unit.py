@@ -29,7 +29,7 @@ from properties import UnitProperties, UnitStatus
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.3.0"
+_VERSION = "0.5.0"
 
 
 class ControlUnitExtension(extensions.DeviceMixin, extensions.PluginExtension):

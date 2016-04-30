@@ -28,7 +28,7 @@
       <Label>Your Omni Controller is communicating with Indigo.</Label>
     </Field>
 
-    <Field id="deviceFactoryVersion" type="textfield" hidden="true" devaultValue="0.3.0"/>
+    <Field id="deviceFactoryVersion" type="textfield" hidden="true" devaultValue="0.5.0"/>
 
     <Field id="isConnected" type="checkbox" hidden="true" defaultValue="false"/>
     <Field id="error" type="checkbox" hidden="true" defaultValue="false"/>

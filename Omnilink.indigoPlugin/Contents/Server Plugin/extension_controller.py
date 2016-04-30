@@ -30,7 +30,7 @@ from properties import ControllerProps, ControllerStatus, AreaStatus
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.4.1"
+_VERSION = "0.5.0"
 
 # to do -- update the battery reading periodically (like once a day)
 # action - set time in controller automatically

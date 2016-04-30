@@ -30,7 +30,7 @@ from properties import ZoneProperties, ZoneStatus
 
 log = logging.getLogger(__name__)
 
-_VERSION = "0.3.0"
+_VERSION = "0.5.0"
 
 
 class ZoneExtension(extensions.DeviceMixin, extensions.PluginExtension):

@@ -19,8 +19,6 @@
 objects into something more pythonic
  """
 
-_VERSION = "0.4.0"
-
 
 class Props(object):
     """ Stores configuration information for one object defined
@@ -119,6 +117,7 @@ class AreaStatus(Status):
     alarm_names = ["Burglary", "Fire", "Gas", "Auxiliary", "Freeze", "Water",
                    "Duress", "Temperature"]
 
+
 class ControllerProps(Props):
     def __init__(self, connection):
         info = connection.omni.reqSystemInformation()
@@ -165,6 +164,7 @@ class ControllerProps(Props):
                   36: "",
                   37: " Pro",
                   38: " LTe"}
+
 
 class ControllerStatus(Status):
     def __init__(self, connection):
