@@ -143,13 +143,13 @@ def test_notification_changes_device_state(
     assert not plugin.errorLog.called
 
     status_msg = jomni_mimic.ObjectStatus(jomnilinkII_message.OBJ_TYPE_UNIT,
-                                          [jomni_mimic.UnitStatus(2, 1, 100)])
+                                          [jomni_mimic.UnitStatus(2, 142, 100)])
 
     omni1._notify("objectStausNotification", status_msg)
     helpers.run_concurrent_thread(plugin, 1)
 
     assert dev.states["onOffState"]
-    assert dev.states["brightnessLevel"] == 1
+    assert dev.states["brightnessLevel"] == 42
     assert dev.states["timeLeftSeconds"] == 100
     assert dev.errorState is None
 
@@ -216,16 +216,20 @@ def test_action_command_dimmer_relay_sends_commands(
 
     action = Mock()
     k = indigo.kDimmerRelayAction
-    actions = ["TurnOn", "TurnOff", "Toggle", "SetBrightness",
-               "BrightenBy", "DimBy"]
-    params = [0, 0, 0, 40, 20, 30]
+    actions = ["TurnOn", "TurnOff", "SetBrightness",
+               "BrightenBy", "DimBy", "Toggle"]
+    params = [0, 0, 40, 20, 30, 0]
     for i, a, p in zip(range(len(actions)), actions, params):
         setattr(k, a, i)
         action.deviceAction = i
         action.actionValue = params[i]
         plugin.actionControlDimmerRelay(action, dev)
 
-    assert omni1.controllerCommand.call_count == len(actions)
+    # and toggle the other way
+    dev.states["onOffState"] = True
+    plugin.actionControlDimmerRelay(action, dev)
+
+    assert omni1.controllerCommand.call_count == len(actions) + 1
 
 
 def test_action_request_status_succeeds(
@@ -248,5 +252,22 @@ def test_action_request_logs_network_error(
     omni1.controllerCommand.side_effect = py4j.protocol.Py4JError
 
     plugin.actionControlDimmerRelay(action, dev)
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+
+def test_action_request_logs_unimplemented_action(
+        plugin, indigo, py4j, omni1, unit_devices):
+    dev = indigo.devices["test X10 Unit"]
+    plugin.deviceStartComm(dev)
+
+    action = Mock()
+    action.deviceAction = indigo.kDimmerRelayAction.Beep
+
+    plugin.actionControlDimmerRelay(action, dev)
+    assert plugin.errorLog.called
+    plugin.errorLog.reset_mock()
+
+    plugin.actionControlGeneral(action, dev)
     assert plugin.errorLog.called
     plugin.errorLog.reset_mock()

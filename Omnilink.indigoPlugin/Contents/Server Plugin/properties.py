@@ -246,7 +246,14 @@ class UnitStatus(Status):
         result = {"onOffState": self.status != 0,
                   "timeLeftSeconds": self.time}
         if self.has_brightness:
-            result["brightnessLevel"] = self.status
+            if self.status == 0:
+                result["brightnessLevel"] = 0
+            elif 100 <= self.status <= 200:
+                result["brightnessLevel"] = self.status - 100
+            else:
+                # status may store last command sent, meaning we have
+                # no way to determine device brighness. But we know it's on.
+                result["brightnessLevel"] = 100
         return result
 
 

@@ -59,13 +59,15 @@ class ControlUnitExtension(extensions.DeviceMixin, extensions.PluginExtension):
                     k.DimBy:         (self.dim_by,         "dim-by")
                     }
 
-        method, text = dispatch[action.deviceAction]
-
         try:
+            method, text = dispatch[action.deviceAction]
             unit_num = dev.pluginProps["number"]
             unit_info = self.info(dev.pluginProps["address"])
             method(action, dev, unit_num, unit_info)
             indigo.server.log('sent "{0}" {1} request'.format(dev.name, text))
+        except KeyError:
+            log.error('{0} not implemented for "{1}"'.format(
+                action.deviceAction.name, dev.name))
         except (Py4JError, ConnectionError):
             log.error('send "{0}" {1} request failed'.format(dev.name, text))
             log.debug("", exc_info=True)
@@ -126,8 +128,6 @@ class UnitInfo(extensions.Info):
         """ UnitInfo constructor
         Parameter:
             connection -- any ducktyped object that provides:
-                connection.is_connected() - return True if an active
-                                          connection to Omni
                 connection.jomnilinkII - link to jomnilinkII java library
                                           via py4j
                 connection.omni - a Connection object from jomnilinkII
@@ -147,14 +147,16 @@ class UnitInfo(extensions.Info):
         May raise ConnectionError or Py4JavaError if there is no valid
         connection or a network error.
         """
-        if objnum not in self.props:
-            raise ConnectionError("Unit {0} is not defined on Omni system")
         jomnilinkII = self.connection.jomnilinkII
         Message = jomnilinkII.Message
         status_msg = self.connection.omni.reqObjectStatus(
             Message.OBJ_TYPE_UNIT, objnum, objnum)
         status = status_msg.getStatuses()[0]
-        return UnitStatus(self.props[objnum].has_brightness, status)
+
+        try:
+            return UnitStatus(self.props[objnum].has_brightness, status)
+        except KeyError:
+            return UnitStatus(True, status)
 
     def number_and_status_from_notification(self, status_msg):
         """ Given a status message from the JomniLinkII notification
@@ -178,6 +180,7 @@ class UnitInfo(extensions.Info):
                                   status)
 
     def report(self, report_name, say):
+        """ Print what we know about units. """
         items = sorted(self.props.items())
         if not items:
             say("None")
